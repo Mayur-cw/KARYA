@@ -49,8 +49,8 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  // Exempt public demo login
-  if (req.path === '/api/auth/demo-login') {
+  // Exempt public demo login and direct session setup
+  if (req.path === '/api/auth/demo-login' || req.path === '/api/session') {
     next();
     return;
   }

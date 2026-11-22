@@ -82,6 +82,7 @@ import {
   deleteSessionByToken,
   SEEDED_USERS,
 } from './session.js';
+import { getDb } from './repository.js';
 import { demoLoginRequestSchema } from '../shared/contracts.js';
 
 export function createApp() {
@@ -202,6 +203,82 @@ export function createApp() {
     res.status(200).json({
       items: SEEDED_USERS,
     });
+  });
+
+  // Direct session endpoints for client SPA state lifecycle
+  app.get('/api/session', (req, res) => {
+    const user = res.locals.principal ?? null;
+    const csrfToken = res.locals.session?.csrfToken ?? '';
+    res.status(200).json({
+      user,
+      csrfToken,
+    });
+  });
+
+  app.post('/api/session', loginRateLimiter, (req, res) => {
+    const parseRes = demoLoginRequestSchema.safeParse(req.body);
+    if (!parseRes.success) {
+      res.status(400).json({
+        code: 'INVALID_INPUT',
+        message: 'Missing or malformed userId',
+        details: parseRes.error.issues,
+      });
+      return;
+    }
+
+    const { userId } = parseRes.data;
+    const user = findUserById(userId);
+    if (!user) {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: `Demo user '${userId}' not found or not allowlisted`,
+      });
+      return;
+    }
+
+    // Clear any previous session token if switching actor
+    const cookies = parseCookies(req.headers.cookie);
+    const existingToken = cookies[SESSION_COOKIE_NAME];
+    if (existingToken) {
+      deleteSessionByToken(existingToken);
+    }
+
+    const { sessionToken, csrfToken } = createSession(user);
+    setSessionCookie(res, sessionToken);
+
+    res.status(200).json({
+      user,
+      csrfToken,
+    });
+  });
+
+  app.delete('/api/session', (req, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    let sessionToken = cookies[SESSION_COOKIE_NAME];
+    if (!sessionToken && req.headers.authorization?.startsWith('Bearer ')) {
+      sessionToken = req.headers.authorization.slice(7).trim();
+    }
+    if (sessionToken) {
+      deleteSessionByToken(sessionToken);
+    }
+    clearSessionCookie(res);
+    res.status(200).json({ ok: true });
+  });
+
+  // Dedicated unread notification count
+  app.get('/api/notifications/unread-count', (req, res) => {
+    const principal = res.locals.principal;
+    if (!principal) {
+      res.json({ count: 0 });
+      return;
+    }
+    const db = getDb();
+    const unreadStmt = db.prepare(`
+      SELECT COUNT(*) as count FROM notifications
+      WHERE recipientId = ? AND readAt IS NULL AND dismissedAt IS NULL
+    `);
+    const unreadRow = unreadStmt.get(principal.id) as { count: number } | undefined;
+    res.json({ count: unreadRow ? unreadRow.count : 0 });
   });
 
   // EP-004..EP-007: User & Identity Management

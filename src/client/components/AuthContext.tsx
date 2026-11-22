@@ -100,9 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUnreadCount(0);
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Session check failed');
+    } catch {
+      // Normal state for unauthenticated visitor
       setUser(null);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
