@@ -68,6 +68,7 @@ export function Header() {
   };
 
   if (!user) {
+    const isPublicLanding = location.pathname === '/';
     return (
       <header className="public-header">
         <Link to="/" className="brand-logo" aria-label="KARYA Institutional workspace home">
@@ -76,7 +77,9 @@ export function Header() {
         </Link>
         <div className="public-header-actions">
           <span>Less paperwork. More progress.</span>
-          <Link to="/login" className="btn btn-primary btn-sm">Sign in</Link>
+          {isPublicLanding && (
+            <Link to="/login" className="btn btn-primary btn-sm">Sign in</Link>
+          )}
         </div>
       </header>
     );
