@@ -29,16 +29,15 @@ interface WorkflowDetail {
   title: string;
   description?: string;
   deadline: string;
-  schema: {
+  schema?: {
     fields: Array<{
       id: string;
       label: string;
       type: string;
       required: boolean;
-      description?: string;
     }>;
   };
-  stages: Array<{
+  stages?: Array<{
     name: string;
     reviewerId: string;
     reviewerName?: string;
@@ -99,7 +98,7 @@ export default function SubmissionInspector() {
         }
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load submission audit record');
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to inspect submission');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -114,7 +113,7 @@ export default function SubmissionInspector() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadData();
-    showToast('Stage history refreshed from authoritative records');
+    showToast('Stage history and submission state refreshed');
   };
 
   // EL-142 Copy case reference
@@ -126,19 +125,25 @@ export default function SubmissionInspector() {
       }
       showToast(`Copied case reference: ${submission.id.slice(0, 8)}...`);
     } catch {
-      showToast(`Case Reference: ${submission.id}`);
+      showToast(`Case reference: ${submission.id}`);
     }
   };
 
   // EL-138 Open attached evidence
-  const handleOpenAttachment = (attId: string) => {
+  const handleOpenEvidence = (attId: string, _fileName: string) => {
     window.open(`/api/attachments/${attId}`, '_blank');
-    showToast('Streaming verification document securely');
+    showToast('Evidence securely streamed');
+  };
+
+  // EL-140 View published workflow
+  const handleViewWorkflow = () => {
+    if (!submission?.workflowId) return;
+    navigate(`/admin/workflows/${submission.workflowId}`);
   };
 
   if (loading) {
     return (
-      <div className="submission-inspector-page" data-testid="page-p-019" style={{ maxWidth: '1050px', margin: '0 auto' }}>
+      <div className="submission-inspector-page" data-testid="page-p-019" style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <LoadingSkeleton label="Loading administrative submission inspection..." lines={8} />
       </div>
     );
@@ -146,7 +151,7 @@ export default function SubmissionInspector() {
 
   if (errorMsg && !submission) {
     return (
-      <div className="submission-inspector-page" data-testid="page-p-019" style={{ maxWidth: '1050px', margin: '0 auto' }}>
+      <div className="submission-inspector-page" data-testid="page-p-019" style={{ maxWidth: '1100px', margin: '0 auto' }}>
         <ErrorMessage
           title="Submission Inspection Notice"
           message={errorMsg}
@@ -155,7 +160,7 @@ export default function SubmissionInspector() {
           className="mb-4"
         />
         <div style={{ marginTop: '16px' }}>
-          <Link to="/admin/workflows" className="btn btn-secondary">
+          <Link to="/admin/workflows" data-testid="EL-141" className="btn btn-secondary">
             ← Return to Workflows
           </Link>
         </div>
@@ -165,14 +170,16 @@ export default function SubmissionInspector() {
 
   if (!submission) return null;
 
-  const stageName = workflow?.stages?.[submission.stageIndex]?.name || `Stage ${submission.stageIndex}`;
-  const backMonitorUrl = submission.workflowId
+  const monitorUrl = submission.workflowId
     ? `/admin/workflows/${submission.workflowId}/monitor`
     : '/admin/workflows';
 
+  const currentStageName =
+    workflow?.stages?.[submission.stageIndex]?.name || `Stage ${submission.stageIndex}`;
+
   return (
-    <div className="submission-inspector-page" data-testid="page-p-019" style={{ maxWidth: '1050px', margin: '0 auto' }}>
-      {/* Top Header & Navigation */}
+    <div className="submission-inspector-page" data-testid="page-p-019" style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      {/* Top Header & Context */}
       <div
         className="card-header"
         style={{
@@ -186,15 +193,15 @@ export default function SubmissionInspector() {
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <Link to={backMonitorUrl} data-testid="EL-141" className="btn btn-secondary btn-sm" aria-label="Back to participation monitor">
-              ← Participation Monitor
+            <Link to={monitorUrl} data-testid="EL-141" className="btn btn-secondary btn-sm" aria-label="Back to participation monitor">
+              ← Process Monitor
             </Link>
-            <span className="badge badge-published">Read-Only Diagnostic</span>
+            <span className="badge badge-draft">Admin Inspector</span>
             <StatusBadge status={submission.status} />
           </div>
           <h1>Administrative Submission Inspector</h1>
           <p className="card-subtitle">
-            Authoritative institutional record for <strong>{submission.studentName || 'Student'}</strong> ({submission.studentEmail}) —{' '}
+            Diagnostic supervision for <strong>{submission.studentName || 'Student'}</strong> ({submission.studentEmail}) —{' '}
             {submission.workflowTitle || 'Internship Application'}
           </p>
         </div>
@@ -206,7 +213,7 @@ export default function SubmissionInspector() {
             data-testid="EL-142"
             className="btn btn-secondary btn-sm"
             onClick={handleCopyReference}
-            title="Copy Case Reference"
+            title="Copy Opaque Case Reference"
           >
             📋 Copy Case Ref
           </button>
@@ -214,9 +221,9 @@ export default function SubmissionInspector() {
             type="button"
             data-testid="EL-140"
             className="btn btn-secondary btn-sm"
-            onClick={() => navigate(`/admin/workflows/${submission.workflowId}`)}
+            onClick={handleViewWorkflow}
           >
-            View Published Workflow →
+            📜 View Published Workflow
           </button>
           <button
             type="button"
@@ -238,12 +245,29 @@ export default function SubmissionInspector() {
 
       {errorMsg && (
         <ErrorMessage
-          title="Inspection Notice"
+          title="Inspector Notice"
           message={errorMsg}
-          code="INSPECTOR_ERROR"
+          code="INSPECTOR_NOTICE"
           className="mb-4"
         />
       )}
+
+      {/* Non-Impersonation Supervision Notice */}
+      <div
+        className="alert alert-info"
+        style={{
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+        }}
+      >
+        <span>
+          🛡️ <strong>Privileged Supervisory Read-Only Mode:</strong> Administrators can inspect applicant responses,
+          stream evidence files, and examine stage decision logs. To preserve institutional integrity, administrators
+          cannot impersonate faculty mentors or record review approvals on this route.
+        </span>
+      </div>
 
       {/* Main Grid: 2 Columns */}
       <div
@@ -254,65 +278,68 @@ export default function SubmissionInspector() {
           alignItems: 'start',
         }}
       >
-        {/* Left Column: Applicant Overview & Dynamic Answers */}
+        {/* Left Column: Summary, Responses & Evidence */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Card: Applicant Summary */}
+          {/* Section: Applicant & Participation Summary */}
           <section className="card">
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
-              Participant & Case Details
+              Participation Summary
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '13px' }}>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div>
-                <span style={{ color: 'var(--ink-muted)', fontWeight: 600 }}>Applicant Name</span>
-                <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--ink-primary)', marginTop: '2px' }}>
-                  {submission.studentName || 'Student Applicant'}
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)' }}>Student Applicant</span>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink-primary)', marginTop: '2px' }}>
+                  {submission.studentName || 'Student'}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>{submission.studentEmail}</div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)' }}>Current Stage</span>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--primary)', marginTop: '2px' }}>
+                  Stage {submission.stageIndex}: {currentStageName}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
+                  Evaluator: {submission.currentReviewerName || submission.currentReviewerId || 'Unassigned'}
                 </div>
               </div>
+
               <div>
-                <span style={{ color: 'var(--ink-muted)', fontWeight: 600 }}>Email Address</span>
-                <div style={{ color: 'var(--ink-primary)', marginTop: '2px' }}>
-                  {submission.studentEmail || 'N/A'}
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)' }}>Lifecycle Status</span>
+                <div style={{ marginTop: '4px' }}>
+                  <StatusBadge status={submission.status} />
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-muted)', marginTop: '4px' }}>
+                  Revision: #{submission.revision} • Version: {submission.version}
                 </div>
               </div>
+
               <div>
-                <span style={{ color: 'var(--ink-muted)', fontWeight: 600 }}>Current Stage</span>
-                <div style={{ color: 'var(--ink-primary)', marginTop: '2px' }}>
-                  Stage {submission.stageIndex}: <strong>{stageName}</strong>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)' }}>Timestamps</span>
+                <div style={{ fontSize: '12px', color: 'var(--ink-secondary)', marginTop: '2px' }}>
+                  Created: {new Date(submission.createdAt).toLocaleString()}
                 </div>
-              </div>
-              <div>
-                <span style={{ color: 'var(--ink-muted)', fontWeight: 600 }}>Assigned Evaluator</span>
-                <div style={{ color: 'var(--ink-primary)', marginTop: '2px' }}>
-                  {submission.currentReviewerName || 'None assigned'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: 'var(--ink-muted)', fontWeight: 600 }}>Revision Count</span>
-                <div style={{ color: 'var(--ink-primary)', marginTop: '2px' }}>
-                  Revision #{submission.revision} (v{submission.version})
-                </div>
-              </div>
-              <div>
-                <span style={{ color: 'var(--ink-muted)', fontWeight: 600 }}>First Submitted</span>
-                <div style={{ color: 'var(--ink-primary)', marginTop: '2px' }}>
-                  {new Date(submission.createdAt).toLocaleDateString()}
+                <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
+                  Updated: {new Date(submission.updatedAt).toLocaleString()}
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Card: Dynamic Field Responses */}
+          {/* Section: Field Evidence Responses */}
           <section className="card">
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
-              Submitted Form Responses
+              Submitted Field Answers
             </h2>
+
             {workflow?.schema?.fields && workflow.schema.fields.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {workflow.schema.fields.map((fld) => {
-                  const val = submission.answers[fld.id];
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {workflow.schema.fields.map((field) => {
+                  const val = submission.answers[field.id];
                   return (
                     <div
-                      key={fld.id}
+                      key={field.id}
                       style={{
                         padding: '12px 16px',
                         backgroundColor: 'var(--bg-subtle)',
@@ -321,9 +348,9 @@ export default function SubmissionInspector() {
                       }}
                     >
                       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)', marginBottom: '4px' }}>
-                        {fld.label} {fld.required && <span style={{ color: 'var(--danger)' }}>*</span>}
+                        {field.label} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}
                       </div>
-                      <div style={{ fontSize: '14px', color: 'var(--ink-primary)', whiteSpace: 'pre-wrap' }}>
+                      <div style={{ fontSize: '15px', color: 'var(--ink-primary)', whiteSpace: 'pre-wrap' }}>
                         {val !== undefined && val !== null && String(val).trim() !== ''
                           ? String(val)
                           : <em style={{ color: 'var(--ink-muted)' }}>Not provided</em>}
@@ -333,7 +360,7 @@ export default function SubmissionInspector() {
                 })}
               </div>
             ) : Object.keys(submission.answers || {}).length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {Object.entries(submission.answers).map(([key, value]) => (
                   <div
                     key={key}
@@ -351,18 +378,16 @@ export default function SubmissionInspector() {
                 ))}
               </div>
             ) : (
-              <p style={{ color: 'var(--ink-muted)' }}>No form responses provided.</p>
+              <p style={{ color: 'var(--ink-muted)' }}>No dynamic field answers provided.</p>
             )}
           </section>
-        </div>
 
-        {/* Right Column: Uploaded Attachments & Stage History */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Section: Uploaded Attachments (EL-138) */}
+          {/* Section: Uploaded Evidence Attachments (EL-138) */}
           <section className="card">
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
-              Attached Evidence Documents
+              Attached Verification Documents
             </h2>
+
             {submission.attachments && submission.attachments.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {submission.attachments.map((att) => (
@@ -381,33 +406,39 @@ export default function SubmissionInspector() {
                     <div>
                       <div style={{ fontWeight: 600, fontSize: '14px' }}>📄 {att.displayName}</div>
                       <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-                        {(att.bytes / 1024).toFixed(1)} KiB • {att.mime}
+                        {(att.bytes / 1024).toFixed(1)} KiB • {att.mime} • Status: {att.status}
                       </div>
                     </div>
                     <button
                       type="button"
                       data-testid="EL-138"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => handleOpenAttachment(att.id)}
+                      onClick={() => handleOpenEvidence(att.id, att.displayName)}
                       aria-label={`Open attached evidence ${att.displayName}`}
                     >
-                      Stream Document ↗
+                      Inspect / Stream ↗
                     </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <p style={{ color: 'var(--ink-muted)', fontSize: '14px' }}>
-                No attachments uploaded for this application.
-              </p>
+              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--ink-muted)' }}>
+                No documents uploaded for this application.
+              </div>
             )}
           </section>
+        </div>
 
-          {/* Section: Stage & Decision Audit Trail */}
+        {/* Right Column: Stage Decision History */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <section className="card">
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
-              Evaluation & Decision History
+            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>
+              Sequential Stage Decision History
             </h2>
+            <p style={{ fontSize: '13px', color: 'var(--ink-muted)', marginBottom: '16px' }}>
+              Immutable audit history of evaluator actions, rejection loops, and final approvals for this case.
+            </p>
+
             {submission.history && submission.history.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {submission.history.map((record, idx) => (
@@ -427,18 +458,29 @@ export default function SubmissionInspector() {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontWeight: 700, fontSize: '14px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '13px' }}>
                         Stage {record.stageIndex} — {record.action.toUpperCase()}
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
                         {new Date(record.decidedAt).toLocaleString()}
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--ink-secondary)', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
                       Evaluator: <strong>{record.reviewerName || record.reviewerId}</strong>
                     </div>
                     {record.reason && (
-                      <div style={{ marginTop: '6px', fontSize: '13px', fontStyle: 'italic', color: 'var(--ink-primary)' }}>
+                      <div
+                        style={{
+                          marginTop: '8px',
+                          padding: '8px 12px',
+                          backgroundColor: 'var(--bg-white)',
+                          border: '1px solid var(--border-light)',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: '13px',
+                          fontStyle: 'italic',
+                          color: 'var(--ink-primary)',
+                        }}
+                      >
                         &ldquo;{record.reason}&rdquo;
                       </div>
                     )}
@@ -446,10 +488,35 @@ export default function SubmissionInspector() {
                 ))}
               </div>
             ) : (
-              <p style={{ color: 'var(--ink-muted)', fontSize: '13px' }}>
-                No evaluation decisions recorded yet. Submission is pending initial stage review.
-              </p>
+              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--ink-muted)' }}>
+                No stage decisions recorded yet. Case is awaiting initial evaluation.
+              </div>
             )}
+          </section>
+
+          {/* Opaque Reference Details */}
+          <section className="card">
+            <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
+              Technical Reference Metadata
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', fontFamily: 'monospace' }}>
+              <div>
+                <span style={{ color: 'var(--ink-muted)' }}>Submission ID: </span>
+                <span>{submission.id}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--ink-muted)' }}>Workflow ID: </span>
+                <span>{submission.workflowId}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--ink-muted)' }}>Student ID: </span>
+                <span>{submission.studentId}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--ink-muted)' }}>Assignment ID: </span>
+                <span>{submission.assignmentId || 'N/A'}</span>
+              </div>
+            </div>
           </section>
         </div>
       </div>

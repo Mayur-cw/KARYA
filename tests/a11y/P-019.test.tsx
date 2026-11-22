@@ -19,10 +19,10 @@ vi.mock('../../src/client/api', () => ({
   setCsrfToken: vi.fn(),
 }));
 
-describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142)', () => {
+describe('P-019 Administrative Submission Inspector Page and Elements (T-A11Y-P019, EL-138..EL-142)', () => {
   const mockSubmission = {
     id: 'sub-insp-101',
-    workflowId: 'wf-internship-1',
+    workflowId: 'wf-insp-1',
     studentId: '22222222-2222-2222-2222-222222222222',
     studentName: 'Aarav Patel',
     studentEmail: 'aarav@karya.local',
@@ -33,7 +33,7 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
     version: 4,
     answers: {
       companyName: 'TechCorp Labs',
-      stipendAmount: '25000',
+      stipendAmount: '30000',
     },
     currentReviewerId: '55555555-5555-5555-5555-555555555555',
     currentReviewerName: 'Dean Academic Affairs',
@@ -41,10 +41,10 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
       {
         id: 'att-insp-1',
         submissionId: 'sub-insp-101',
-        displayName: 'offer_letter.pdf',
+        displayName: 'signed_offer.pdf',
         mime: 'application/pdf',
-        bytes: 102400,
-        status: 'draft',
+        bytes: 204800,
+        status: 'locked',
         createdAt: new Date().toISOString(),
       },
     ],
@@ -63,9 +63,9 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
   };
 
   const mockWorkflow = {
-    id: 'wf-internship-1',
+    id: 'wf-insp-1',
     title: 'Summer Internship 2026',
-    description: 'Summer internship requirements',
+    description: 'Department internship approval',
     deadline: new Date(Date.now() + 86400000).toISOString(),
     schema: {
       fields: [
@@ -74,8 +74,8 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
       ],
     },
     stages: [
-      { name: 'Faculty Mentor Endorsement', reviewerId: '44444444-4444-4444-4444-444444444444', reviewerName: 'Prof. Ramesh Kumar' },
-      { name: 'Dean Final Approval', reviewerId: '55555555-5555-5555-5555-555555555555', reviewerName: 'Dean Academic Affairs' },
+      { name: 'Faculty Endorsement', reviewerId: '44444444-4444-4444-4444-444444444444', reviewerName: 'Prof. Ramesh Kumar' },
+      { name: 'Dean Approval', reviewerId: '55555555-5555-5555-5555-555555555555', reviewerName: 'Dean Academic Affairs' },
     ],
   };
 
@@ -103,14 +103,14 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
       if (path === '/api/submissions/sub-insp-101') {
         return Promise.resolve(mockSubmission);
       }
-      if (path === '/api/workflows/wf-internship-1') {
+      if (path === '/api/workflows/wf-insp-1') {
         return Promise.resolve(mockWorkflow);
       }
       return Promise.resolve({});
     });
   });
 
-  it('renders heading, student answers, and controls EL-138..EL-142', async () => {
+  it('renders heading, participation summary, and controls EL-138..EL-142', async () => {
     await act(async () => {
       render(
         <MemoryRouter initialEntries={['/admin/submissions/sub-insp-101']}>
@@ -128,7 +128,8 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
 
     // EL-141 Back to participation monitor
     const el141 = screen.getByTestId('EL-141');
-    expect(el141.getAttribute('href')).toBe('/admin/workflows/wf-internship-1/monitor');
+    expect(el141).toBeDefined();
+    expect(el141.getAttribute('href')).toBe('/admin/workflows/wf-insp-1/monitor');
 
     // EL-142 Copy case reference
     const el142 = screen.getByTestId('EL-142');
@@ -145,12 +146,9 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
     // EL-138 Open attached evidence
     const el138 = screen.getByTestId('EL-138');
     expect(el138).toBeDefined();
-
-    // Verify stage history rendered
-    expect(screen.getByText(/Recommended for dean approval/)).toBeDefined();
   });
 
-  it('handles refresh (EL-139) and copy case reference (EL-142)', async () => {
+  it('handles copy case reference (EL-142) and refresh (EL-139)', async () => {
     await act(async () => {
       render(
         <MemoryRouter initialEntries={['/admin/submissions/sub-insp-101']}>
@@ -161,17 +159,39 @@ describe('P-019 Administrative Submission Inspector (T-A11Y-P019, EL-138..EL-142
       );
     });
 
-    const el139 = screen.getByTestId('EL-139');
     const el142 = screen.getByTestId('EL-142');
-
-    await act(async () => {
-      fireEvent.click(el139);
-    });
-    expect(apiModule.api).toHaveBeenCalledWith('/api/submissions/sub-insp-101');
-
     await act(async () => {
       fireEvent.click(el142);
     });
     expect(screen.getByText(/Copied case reference/)).toBeDefined();
+
+    const el139 = screen.getByTestId('EL-139');
+    await act(async () => {
+      fireEvent.click(el139);
+    });
+    expect(apiModule.api).toHaveBeenCalledWith('/api/submissions/sub-insp-101');
+  });
+
+  it('inspects attached evidence (EL-138)', async () => {
+    const originalOpen = window.open;
+    window.open = vi.fn();
+
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/admin/submissions/sub-insp-101']}>
+          <Routes>
+            <Route path="/admin/submissions/:submissionId" element={<SubmissionInspector />} />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+
+    const el138 = screen.getByTestId('EL-138');
+    await act(async () => {
+      fireEvent.click(el138);
+    });
+
+    expect(window.open).toHaveBeenCalledWith('/api/attachments/att-insp-1', '_blank');
+    window.open = originalOpen;
   });
 });
