@@ -79,12 +79,13 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
  * Relaxed during NODE_ENV==='test' to permit high-speed automated integration test runs
  */
 const isTest = process.env.NODE_ENV === 'test';
+const isDev = process.env.NODE_ENV !== 'production';
 
 export const loginRateLimiter: RequestHandler = isTest
   ? (_req, _res, next) => next()
   : rateLimit({
       windowMs: 60 * 1000,
-      limit: 5,
+      limit: isDev ? 120 : 5,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
       message: { code: 'RATE_LIMITED', message: 'Too many login attempts. Please retry later.' },
