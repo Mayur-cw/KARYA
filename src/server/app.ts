@@ -66,6 +66,12 @@ import {
   handleDeleteAttachment,
 } from './modules/private-upload-references-file-streaming.js';
 import {
+  handleGetNotifications,
+  handlePatchNotification,
+  handleDeleteNotification,
+  handleGetWorkflowAnalytics,
+} from './modules/notification-delivery-live-dashboards.js';
+import {
   findUserById,
   createSession,
   deleteSessionByToken,
@@ -227,6 +233,14 @@ export function createApp() {
   app.get('/api/attachments/:attachmentId', requireAuth, readRateLimiter, handleGetAttachment);
   app.patch('/api/attachments/:attachmentId', requireRoles('student'), writeRateLimiter, handlePatchAttachment);
   app.delete('/api/attachments/:attachmentId', requireRoles('student'), writeRateLimiter, handleDeleteAttachment);
+
+  // EP-030..EP-032: Notification Delivery & Management
+  app.get('/api/notifications', requireAuth, readRateLimiter, handleGetNotifications);
+  app.patch('/api/notifications/:notificationId', requireAuth, writeRateLimiter, handlePatchNotification);
+  app.delete('/api/notifications/:notificationId', requireAuth, writeRateLimiter, handleDeleteNotification);
+
+  // EP-034: Workflow Analytics & Live Dashboard (Admin only)
+  app.get('/api/workflows/:workflowId/analytics', requireRoles('admin'), readRateLimiter, handleGetWorkflowAnalytics);
 
   // Route stub for testing student object isolation (IDOR guard)
   app.get('/api/submissions/:submissionId/test-scope', requireAuth, (req, res) => {
