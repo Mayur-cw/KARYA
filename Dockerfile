@@ -14,6 +14,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/dist ./dist
+RUN mkdir -p /app/.data /app/.karya_storage && chown -R app:app /app
 USER app
 ENV PORT=8080
 EXPOSE 8080

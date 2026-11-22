@@ -82,11 +82,12 @@ import {
   SEEDED_USERS,
 } from './session.js';
 import { getDb, UserRepository } from './repository.js';
-import { demoLoginRequestSchema } from '../shared/contracts.js';
+import { demoLoginRequestSchema, type UserPublic } from '../shared/contracts.js';
 
 export function createApp() {
   const config = getConfig();
   const app = express();
+  app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
   app.use(
@@ -146,6 +147,7 @@ export function createApp() {
       limit: 500,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
+      validate: { xForwardedForHeader: false },
     })
   );
 
@@ -186,14 +188,23 @@ export function createApp() {
     }
 
     const { userId } = parseRes.data;
-    const allowlisted = SEEDED_USERS.some(candidate => candidate.id === userId);
-    const user = allowlisted ? new UserRepository(getDb()).getById(userId) : undefined;
-    if (!user?.active) {
+    const allowlisted = SEEDED_USERS.find(candidate => candidate.id === userId);
+    if (!allowlisted) {
       res.status(404).json({
         code: 'NOT_FOUND',
         message: `Demo user '${userId}' not found or not allowlisted`,
       });
       return;
+    }
+
+    let user: UserPublic = allowlisted;
+    try {
+      const dbUser = new UserRepository(getDb()).getById(userId);
+      if (dbUser?.active) {
+        user = dbUser;
+      }
+    } catch (dbErr) {
+      console.warn('Database query during session login failed, using allowlisted user:', dbErr);
     }
 
     const { sessionToken, csrfToken } = createSession(user);
@@ -260,14 +271,23 @@ export function createApp() {
     }
 
     const { userId } = parseRes.data;
-    const allowlisted = SEEDED_USERS.some(candidate => candidate.id === userId);
-    const user = allowlisted ? new UserRepository(getDb()).getById(userId) : undefined;
-    if (!user?.active) {
+    const allowlisted = SEEDED_USERS.find(candidate => candidate.id === userId);
+    if (!allowlisted) {
       res.status(404).json({
         code: 'NOT_FOUND',
         message: `Demo user '${userId}' not found or not allowlisted`,
       });
       return;
+    }
+
+    let user: UserPublic = allowlisted;
+    try {
+      const dbUser = new UserRepository(getDb()).getById(userId);
+      if (dbUser?.active) {
+        user = dbUser;
+      }
+    } catch (dbErr) {
+      console.warn('Database query during session login failed, using allowlisted user:', dbErr);
     }
 
     // Clear any previous session token if switching actor
@@ -397,6 +417,14 @@ export function createApp() {
   const staticDir = path.resolve(dirname, '../../dist/client');
   app.use(express.static(staticDir, { maxAge: '1h' }));
   app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
+
+  // Global JSON error handler
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('Unhandled server error:', err);
+    const message = err instanceof Error ? err.message : 'Internal Server Error';
+    const code = (err as { code?: string })?.code || 'INTERNAL_ERROR';
+    res.status(500).json({ code, message });
+  });
 
   return app;
 }

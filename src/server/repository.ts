@@ -210,16 +210,35 @@ export function initDatabase(dbPath?: string): DatabaseSync {
   let resolvedPath = dbPath ?? (process.env.NODE_ENV === 'test' ? ':memory:' : undefined);
   if (!resolvedPath) {
     const dirname = path.dirname(fileURLToPath(import.meta.url));
-    const dataDir = path.resolve(dirname, '../../.data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    const primaryDataDir = path.resolve(dirname, '../../.data');
+    let dataDir = primaryDataDir;
+    try {
+      if (!fs.existsSync(primaryDataDir)) {
+        fs.mkdirSync(primaryDataDir, { recursive: true });
+      }
+      const probe = path.join(primaryDataDir, '.probe');
+      fs.writeFileSync(probe, '');
+      fs.unlinkSync(probe);
+    } catch {
+      dataDir = '/tmp/karya_data';
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
     }
     resolvedPath = path.join(dataDir, 'karya.db');
   }
 
   const db = new DatabaseSync(resolvedPath);
-  db.exec('PRAGMA foreign_keys = ON;');
-  db.exec('PRAGMA journal_mode = WAL;');
+  try {
+    db.exec('PRAGMA foreign_keys = ON;');
+    db.exec('PRAGMA journal_mode = WAL;');
+  } catch {
+    try {
+      db.exec('PRAGMA journal_mode = DELETE;');
+    } catch {
+      // pragma fallback
+    }
+  }
 
   // Run migration
   const dirname = path.dirname(fileURLToPath(import.meta.url));

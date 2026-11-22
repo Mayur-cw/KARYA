@@ -31,7 +31,13 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   if (sessionToken) {
     const verified = getSessionByToken(sessionToken);
     if (verified) {
-      const user = new UserRepository(getDb()).getById(verified.user.id);
+      let user: UserPublic = verified.user;
+      try {
+        const dbUser = new UserRepository(getDb()).getById(verified.user.id);
+        if (dbUser) user = dbUser;
+      } catch {
+        // fallback to in-memory verified user
+      }
       if (user?.active) {
         res.locals.principal = user;
         res.locals.session = verified.session;

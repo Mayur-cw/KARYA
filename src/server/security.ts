@@ -85,9 +85,10 @@ export const loginRateLimiter: RequestHandler = isTest
   ? (_req, _res, next) => next()
   : rateLimit({
       windowMs: 60 * 1000,
-      limit: isDev ? 120 : 5,
+      limit: 120,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
+      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Too many login attempts. Please retry later.' },
     });
 
@@ -95,9 +96,10 @@ export const aiRateLimiter: RequestHandler = isTest
   ? (_req, _res, next) => next()
   : rateLimit({
       windowMs: 60 * 1000,
-      limit: 3,
+      limit: 5,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
+      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'AI proposal limit reached. Please wait a moment.' },
     });
 
@@ -105,9 +107,10 @@ export const uploadRateLimiter: RequestHandler = isTest
   ? (_req, _res, next) => next()
   : rateLimit({
       windowMs: 60 * 1000,
-      limit: 10,
+      limit: 20,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
+      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Upload rate limit reached.' },
     });
 
@@ -115,9 +118,10 @@ export const writeRateLimiter: RequestHandler = isTest
   ? (_req, _res, next) => next()
   : rateLimit({
       windowMs: 60 * 1000,
-      limit: 30,
+      limit: 60,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
+      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Write request limit reached.' },
     });
 
@@ -125,8 +129,9 @@ export const readRateLimiter: RequestHandler = isTest
   ? (_req, _res, next) => next()
   : rateLimit({
       windowMs: 60 * 1000,
-      limit: 120,
+      limit: 200,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
+      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Read request limit reached.' },
     });

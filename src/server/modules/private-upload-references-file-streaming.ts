@@ -31,10 +31,21 @@ export interface AttachmentRow {
 const STORAGE_DIR = process.env.ATTACHMENT_STORAGE_DIR || path.join(process.cwd(), '.karya_storage', 'attachments');
 
 function ensureStorageDir(): string {
-  if (!fs.existsSync(STORAGE_DIR)) {
-    fs.mkdirSync(STORAGE_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(STORAGE_DIR)) {
+      fs.mkdirSync(STORAGE_DIR, { recursive: true });
+    }
+    const testFile = path.join(STORAGE_DIR, '.probe');
+    fs.writeFileSync(testFile, '');
+    fs.unlinkSync(testFile);
+    return STORAGE_DIR;
+  } catch {
+    const fallback = '/tmp/karya_attachments';
+    if (!fs.existsSync(fallback)) {
+      fs.mkdirSync(fallback, { recursive: true });
+    }
+    return fallback;
   }
-  return STORAGE_DIR;
 }
 
 export function sniffMime(buf: Buffer): 'application/pdf' | 'image/png' | 'image/jpeg' | null {
