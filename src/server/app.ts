@@ -58,6 +58,7 @@ import {
   handleSubmitSubmission,
   handleDeleteSubmission,
 } from './modules/dynamic-submissions-deadlines.js';
+import { handlePostSubmissionDecision } from './modules/multi-stage-review-atomics.js';
 import {
   findUserById,
   createSession,
@@ -206,13 +207,8 @@ export function createApp() {
   app.post('/api/submissions/:submissionId/submit', requireRoles('student'), writeRateLimiter, handleSubmitSubmission);
   app.delete('/api/submissions/:submissionId', requireRoles('student'), writeRateLimiter, handleDeleteSubmission);
 
-  // Route stub for reviewer-only decision (EP-029)
-  app.post('/api/submissions/:submissionId/decision', requireRoles('reviewer'), (_req, res) => {
-    res.status(200).json({
-      id: _req.params.submissionId,
-      status: 'approved',
-    });
-  });
+  // EP-029: Multi-Stage Review Decision (Reviewer only)
+  app.post('/api/submissions/:submissionId/decision', requireRoles('reviewer'), writeRateLimiter, handlePostSubmissionDecision);
 
   // Route stub for testing student object isolation (IDOR guard)
   app.get('/api/submissions/:submissionId/test-scope', requireAuth, (req, res) => {

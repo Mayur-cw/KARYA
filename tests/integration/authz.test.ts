@@ -134,16 +134,17 @@ describe('Session Security, Authorization and Private File Guard (T-03)', () => 
 
     it('allows mutating write with valid x-csrf-token header', async () => {
       const db = getDb();
+      const wfId = 'wf-csrf-' + crypto.randomUUID();
       const now = new Date().toISOString();
       const deadline = new Date(Date.now() + 86400000).toISOString();
       db.prepare(`
-        INSERT OR IGNORE INTO workflows (id, departmentId, createdBy, title, status, origin, fields, stages, uncertainties, requirements, deadline, version, createdAt, updatedAt)
-        VALUES ('wf-123', ?, ?, 'Test WF', 'published', 'manual', '[]', '[]', '[]', '[]', ?, 1, ?, ?)
-      `).run(studentA.departmentId, studentA.id, deadline, now, now);
+        INSERT INTO workflows (id, departmentId, createdBy, title, status, origin, fields, stages, uncertainties, requirements, deadline, version, createdAt, updatedAt)
+        VALUES (?, ?, ?, 'Test WF', 'published', 'manual', '[]', '[]', '[]', '[]', ?, 1, ?, ?)
+      `).run(wfId, studentA.departmentId, studentA.id, deadline, now, now);
       db.prepare(`
-        INSERT OR IGNORE INTO assignments (id, workflowId, studentId, status, assignedAt)
-        VALUES ('assign-123', 'wf-123', ?, 'invited', ?)
-      `).run(studentA.id, now);
+        INSERT INTO assignments (id, workflowId, studentId, status, assignedAt)
+        VALUES (?, ?, ?, 'invited', ?)
+      `).run(crypto.randomUUID(), wfId, studentA.id, now);
 
       const loginRes = await request(app)
         .post('/api/auth/demo-login')
@@ -152,13 +153,13 @@ describe('Session Security, Authorization and Private File Guard (T-03)', () => 
       const csrfToken = loginRes.body.csrfToken;
 
       const postRes = await request(app)
-        .post('/api/workflows/wf-123/submissions')
+        .post(`/api/workflows/${wfId}/submissions`)
         .set('Cookie', cookie)
         .set('x-csrf-token', csrfToken)
         .send({});
 
       expect(postRes.status).toBe(201);
-      expect(postRes.body.workflowId).toBe('wf-123');
+      expect(postRes.body.workflowId).toBe(wfId);
     });
   });
 
