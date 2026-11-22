@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+coverage
+planning-private
+.env*
+!.env.example
+*.zip
+*.sha256
+examples
