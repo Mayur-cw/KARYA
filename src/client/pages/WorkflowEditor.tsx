@@ -677,20 +677,7 @@ export default function WorkflowEditor() {
           {workflow.sourceDocument && (
             <div className="card">
               <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Source instruction</h2>
-              <div
-                style={{
-                  maxHeight: '160px',
-                  overflowY: 'auto',
-                  padding: '10px 14px',
-                  backgroundColor: 'var(--bg-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '12px',
-                  fontFamily: 'var(--font-mono)',
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {workflow.sourceDocument.extractedText}
-              </div>
+              <textarea className="source-evidence-scroll" aria-label="Source instruction text" readOnly value={workflow.sourceDocument.extractedText} />
             </div>
           )}
 

@@ -603,3 +603,5 @@ input[type=checkbox], input[type=radio] { accent-color: var(--primary); min-widt
 
 /* Keep breadcrumb context readable on the light top bar. */
 .breadcrumb .breadcrumb-root { color: var(--ink-muted); }
+
+.source-evidence-scroll { width: 100%; height: 160px; resize: vertical; border: 1px solid var(--border-light); color: var(--ink-secondary); overflow-y: auto; padding: 10px 14px; background: var(--bg-subtle); border-radius: var(--radius-sm); font-size: .8125rem; font-family: var(--font-mono); white-space: pre-wrap; }
