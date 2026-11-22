@@ -109,6 +109,21 @@ export function createApp() {
         if (!origin) return cb(null, true);
         const allowed = config.ALLOWED_ORIGINS.split(',').map((x) => x.trim());
         if (allowed.includes(origin)) return cb(null, true);
+        try {
+          const url = new URL(origin);
+          if (
+            url.hostname.endsWith('.onrender.com') ||
+            url.hostname.endsWith('.railway.app') ||
+            url.hostname.endsWith('.run.app') ||
+            url.hostname.endsWith('.vercel.app') ||
+            url.hostname.endsWith('.koyeb.app') ||
+            url.hostname.endsWith('.fly.dev')
+          ) {
+            return cb(null, true);
+          }
+        } catch {
+          // ignore malformed URL
+        }
         if (config.NODE_ENV === 'development') {
           try {
             const url = new URL(origin);
