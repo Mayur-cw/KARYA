@@ -16,11 +16,20 @@ import {
 import {
   csrfProtection,
   loginRateLimiter,
+  uploadRateLimiter,
+  aiRateLimiter,
   setSessionCookie,
   clearSessionCookie,
   parseCookies,
   SESSION_COOKIE_NAME,
 } from './security.js';
+import {
+  handlePostDocument,
+  handleGetDocument,
+  handlePatchDocument,
+  handleDeleteDocument,
+  handleProposeWorkflow,
+} from './modules/private-source-extraction-ai-proposal-adapter.js';
 import {
   findUserById,
   createSession,
@@ -188,6 +197,15 @@ export function createApp() {
     }
     res.status(200).json({ status: 'ok', ownerStudentId: targetStudentId });
   });
+
+  // EP-008..EP-011: Document Management (Admin only)
+  app.post('/api/documents', requireRoles('admin'), uploadRateLimiter, handlePostDocument);
+  app.get('/api/documents/:documentId', requireRoles('admin'), handleGetDocument);
+  app.patch('/api/documents/:documentId', requireRoles('admin'), handlePatchDocument);
+  app.delete('/api/documents/:documentId', requireRoles('admin'), handleDeleteDocument);
+
+  // EP-016: Workflow Proposal Generation (Admin only)
+  app.post('/api/workflows/:workflowId/propose', requireRoles('admin'), aiRateLimiter, handleProposeWorkflow);
 
   // Static files and client SPA fallback
   const dirname = path.dirname(fileURLToPath(import.meta.url));
