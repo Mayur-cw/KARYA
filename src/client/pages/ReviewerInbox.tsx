@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../components/AuthContext';
-import { MetricCards } from '../components/MetricCards';
-import { StatusBadge } from '../components/StatusBadge';
-import { LoadingSkeleton } from '../components/LoadingSkeleton';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { EmptyState } from '../components/EmptyState';
-import { fetchCollection } from '../collections';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../components/AuthContext";
+import { MetricCards } from "../components/MetricCards";
+import { StatusBadge } from "../components/StatusBadge";
+import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { EmptyState } from "../components/EmptyState";
+import { fetchCollection } from "../collections";
 
 interface ReviewQueueItem {
   id: string;
@@ -15,7 +15,13 @@ interface ReviewQueueItem {
   studentName?: string;
   studentEmail?: string;
   workflowTitle?: string;
-  status: 'draft' | 'submitted' | 'in_review' | 'needs_changes' | 'approved' | 'rejected';
+  status:
+    | "draft"
+    | "submitted"
+    | "in_review"
+    | "needs_changes"
+    | "approved"
+    | "rejected";
   stageIndex: number;
   submittedAt?: string | null;
   createdAt: string;
@@ -34,8 +40,8 @@ export default function ReviewerInbox() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Search & Filter & Pagination state (EL-087, EL-088, EL-089, EL-090)
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
 
   const showToast = (msg: string) => {
@@ -46,11 +52,15 @@ export default function ReviewerInbox() {
   const loadReviewQueue = useCallback(async () => {
     try {
       setErrorMsg(null);
-      const data = await fetchCollection<ReviewQueueItem>('/api/submissions');
+      const data = await fetchCollection<ReviewQueueItem>("/api/submissions");
       setSubmissions(data);
       return true;
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load assigned review queue');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "Failed to load assigned review queue",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -64,13 +74,14 @@ export default function ReviewerInbox() {
   // EL-094 Refresh assigned queue
   const handleRefresh = async () => {
     setRefreshing(true);
-    if (await loadReviewQueue()) showToast('Review queue refreshed from live records');
+    if (await loadReviewQueue())
+      showToast("Review queue refreshed from live records");
   };
 
-  // EL-093 Logout
+  // EL-093 Sign out
   const handleLogout = async () => {
     await logout();
-    navigate('/');
+    navigate("/");
   };
 
   // Filter & Search
@@ -84,60 +95,95 @@ export default function ReviewerInbox() {
         (sub.workflowTitle && sub.workflowTitle.toLowerCase().includes(q));
 
       const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'in_review'
-          ? sub.status === 'in_review' || sub.status === 'submitted'
+        statusFilter === "all" ||
+        (statusFilter === "in_review"
+          ? sub.status === "in_review" || sub.status === "submitted"
           : sub.status === statusFilter);
 
       return matchesQ && matchesStatus;
     });
   }, [submissions, searchQuery, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / PAGE_SIZE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredSubmissions.length / PAGE_SIZE),
+  );
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
-  const pagedSubmissions = filteredSubmissions.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pagedSubmissions = filteredSubmissions.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
 
   const hasNextPage = safePage < totalPages;
   const hasPrevPage = safePage > 1;
 
   // Telemetry counts
-  const pendingCount = submissions.filter((s) => s.status === 'submitted' || s.status === 'in_review').length;
-  const needsChangesCount = submissions.filter((s) => s.status === 'needs_changes').length;
-  const resolvedCount = submissions.filter((s) => s.status === 'approved' || s.status === 'rejected').length;
+  const pendingCount = submissions.filter(
+    (s) => s.status === "submitted" || s.status === "in_review",
+  ).length;
+  const needsChangesCount = submissions.filter(
+    (s) => s.status === "needs_changes",
+  ).length;
+  const resolvedCount = submissions.filter(
+    (s) => s.status === "approved" || s.status === "rejected",
+  ).length;
 
   return (
-    <div className="reviewer-inbox-page" data-testid="page-p-012" >
+    <div className="reviewer-inbox-page" data-testid="page-p-012">
       {/* Top Header */}
       <div
         className="card-header"
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '24px',
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "16px",
+          marginBottom: "24px",
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span className="badge badge-in_review">Evaluator Desk</span>
-            <span style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-              Reviewer: {user?.name || 'Faculty Evaluator'}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "8px",
+            }}
+          >
+            <span className="badge badge-in_review">REVIEW WORKSPACE</span>
+            <span style={{ fontSize: "13px", color: "var(--ink-muted)" }}>
+              Reviewer: {user?.name || "Faculty Evaluator"}
             </span>
           </div>
           <h1>Reviewer Inbox</h1>
           <p className="card-subtitle">
-            Evaluate assigned student submissions, inspect uploaded credentials, and approve or request revisions.
+            Give each application a clear next step. Review evidence, leave
+            useful feedback, and record your decision.
           </p>
         </div>
 
         {/* Global Utilities (EL-091, EL-092, EL-093) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <Link to="/notifications" data-testid="EL-091" className="btn btn-secondary btn-sm">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
+          <Link
+            to="/notifications"
+            data-testid="EL-091"
+            className="btn btn-secondary btn-sm"
+          >
             Notifications
           </Link>
-          <Link to="/account" data-testid="EL-092" className="btn btn-secondary btn-sm">
+          <Link
+            to="/account"
+            data-testid="EL-092"
+            className="btn btn-secondary btn-sm"
+          >
             My Account
           </Link>
           <button
@@ -146,13 +192,18 @@ export default function ReviewerInbox() {
             className="btn btn-secondary btn-sm"
             onClick={handleLogout}
           >
-            Logout
+            Sign out
           </button>
         </div>
       </div>
 
       {toastMessage && (
-        <div className="alert alert-success" role="status" aria-live="polite" style={{ marginBottom: '20px' }}>
+        <div
+          className="alert alert-success"
+          role="status"
+          aria-live="polite"
+          style={{ marginBottom: "20px" }}
+        >
           <span>✓ {toastMessage}</span>
         </div>
       )}
@@ -167,28 +218,57 @@ export default function ReviewerInbox() {
         />
       )}
 
-      <MetricCards loading={loading} error={!!errorMsg} items={[
-        { title: 'Assigned to you', value: submissions.length, description: 'Applications in your queue', icon: 'inbox' },
-        { title: 'Awaiting review', value: pendingCount, description: 'Ready for your decision', icon: 'clock', featured: true },
-        { title: 'Changes requested', value: needsChangesCount, description: 'Waiting for student updates', icon: 'file' },
-        { title: 'Decisions recorded', value: resolvedCount, description: 'Approved or rejected', icon: 'check' },
-      ]} />
+      <MetricCards
+        loading={loading}
+        error={!!errorMsg}
+        items={[
+          {
+            title: "Assigned to you",
+            value: submissions.length,
+            description: "Applications in your queue",
+            icon: "inbox",
+          },
+          {
+            title: "Awaiting review",
+            value: pendingCount,
+            description: "Ready for your decision",
+            icon: "clock",
+            featured: true,
+          },
+          {
+            title: "Changes requested",
+            value: needsChangesCount,
+            description: "Waiting for student updates",
+            icon: "file",
+          },
+          {
+            title: "Decisions recorded",
+            value: resolvedCount,
+            description: "Approved or rejected",
+            icon: "check",
+          },
+        ]}
+      />
 
       {/* Filter and Search Bar (EL-087, EL-088, EL-094) */}
       <div
         className="card"
         style={{
-          padding: '16px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '16px',
-          alignItems: 'center',
-          backgroundColor: 'var(--bg-subtle)',
+          padding: "16px 20px",
+          marginBottom: "20px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "16px",
+          alignItems: "center",
+          backgroundColor: "var(--bg-subtle)",
         }}
       >
-        <div style={{ flex: '1 1 260px' }}>
-          <label htmlFor="search-applicant-input" className="form-label" style={{ fontSize: '13px' }}>
+        <div style={{ flex: "1 1 260px" }}>
+          <label
+            htmlFor="search-applicant-input"
+            className="form-label"
+            style={{ fontSize: "13px" }}
+          >
             Search Assigned Applicant
           </label>
           <input
@@ -202,12 +282,16 @@ export default function ReviewerInbox() {
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            style={{ height: '40px', minHeight: '40px' }}
+            style={{ height: "40px", minHeight: "40px" }}
           />
         </div>
 
-        <div style={{ flex: '0 1 200px' }}>
-          <label htmlFor="filter-stage-status-select" className="form-label" style={{ fontSize: '13px' }}>
+        <div style={{ flex: "0 1 200px" }}>
+          <label
+            htmlFor="filter-stage-status-select"
+            className="form-label"
+            style={{ fontSize: "13px" }}
+          >
             Stage Status
           </label>
           <select
@@ -219,26 +303,28 @@ export default function ReviewerInbox() {
               setStatusFilter(e.target.value);
               setCurrentPage(1);
             }}
-            style={{ height: '40px', minHeight: '40px' }}
+            style={{ height: "40px", minHeight: "40px" }}
           >
             <option value="all">All Submissions</option>
-            <option value="in_review">Pending Review (Submitted / In Review)</option>
+            <option value="in_review">
+              Pending Review (Submitted / In Review)
+            </option>
             <option value="needs_changes">Needs Changes</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
         </div>
 
-        <div style={{ alignSelf: 'flex-end' }}>
+        <div style={{ alignSelf: "flex-end" }}>
           <button
             type="button"
             data-testid="EL-094"
             className="btn btn-secondary btn-sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            style={{ height: '40px' }}
+            style={{ height: "40px" }}
           >
-            {refreshing ? 'Refreshing...' : '↻ Refresh Queue'}
+            {refreshing ? "Refreshing..." : "↻ Refresh Queue"}
           </button>
         </div>
       </div>
@@ -250,19 +336,21 @@ export default function ReviewerInbox() {
         <EmptyState
           title="No submissions pending in your queue"
           description={
-            searchQuery || statusFilter !== 'all'
-              ? 'No assigned submissions match your filter criteria.'
-              : 'You have no applications awaiting your review at this time.'
+            searchQuery || statusFilter !== "all"
+              ? "No assigned submissions match your filter criteria."
+              : "You have no applications awaiting your review at this time."
           }
-          actionLabel={searchQuery || statusFilter !== 'all' ? 'Clear Filters' : undefined}
+          actionLabel={
+            searchQuery || statusFilter !== "all" ? "Clear Filters" : undefined
+          }
           onAction={() => {
-            setSearchQuery('');
-            setStatusFilter('all');
+            setSearchQuery("");
+            setStatusFilter("all");
           }}
         />
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
             <table className="data-table" aria-label="Review Queue Table">
               <thead>
                 <tr>
@@ -271,36 +359,50 @@ export default function ReviewerInbox() {
                   <th scope="col">Stage</th>
                   <th scope="col">Status</th>
                   <th scope="col">Application date</th>
-                  <th scope="col" style={{ textAlign: 'right' }}>Action</th>
+                  <th scope="col" style={{ textAlign: "right" }}>
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {pagedSubmissions.map((sub) => (
                   <tr key={sub.id}>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{sub.studentName || 'Student Applicant'}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-                        {sub.studentEmail || sub.studentId.slice(0, 8) + '...'}
+                      <div style={{ fontWeight: 600 }}>
+                        {sub.studentName || "Student Applicant"}
+                      </div>
+                      <div
+                        style={{ fontSize: "12px", color: "var(--ink-muted)" }}
+                      >
+                        {sub.studentEmail || sub.studentId.slice(0, 8) + "..."}
                       </div>
                     </td>
                     <td>
-                      <div style={{ fontWeight: 500 }}>{sub.workflowTitle || 'Internship Application'}</div>
+                      <div style={{ fontWeight: 500 }}>
+                        {sub.workflowTitle || "Internship Application"}
+                      </div>
                     </td>
                     <td>
-                      <span className="badge badge-draft">Stage {sub.stageIndex}</span>
+                      <span className="badge badge-draft">
+                        Stage {(sub.stageIndex ?? 0) + 1}
+                      </span>
                     </td>
                     <td>
                       <StatusBadge status={sub.status} />
                     </td>
-                    <td style={{ fontSize: '13px' }}>
-                      {new Date(sub.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    <td style={{ fontSize: "13px" }}>
+                      {new Date(sub.createdAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
                     </td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td style={{ textAlign: "right" }}>
                       <Link
                         to={`/reviewer/submissions/${sub.id}`}
                         data-testid="EL-086"
                         className="btn btn-primary btn-sm"
-                        aria-label={`Open review for ${sub.studentName || 'applicant'}`}
+                        aria-label={`Open review for ${sub.studentName || "applicant"}`}
                       >
                         Evaluate
                       </Link>
@@ -314,20 +416,21 @@ export default function ReviewerInbox() {
           {/* Pagination Controls (EL-089, EL-090) */}
           <div
             style={{
-              padding: '16px 20px',
-              borderTop: '1px solid var(--border-light)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: 'var(--bg-subtle)',
+              padding: "16px 20px",
+              borderTop: "1px solid var(--border-light)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: "var(--bg-subtle)",
             }}
           >
-            <div style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
+            <div style={{ fontSize: "13px", color: "var(--ink-muted)" }}>
               Showing {(safePage - 1) * PAGE_SIZE + 1}–
-              {Math.min(safePage * PAGE_SIZE, filteredSubmissions.length)} of {filteredSubmissions.length} applications
+              {Math.min(safePage * PAGE_SIZE, filteredSubmissions.length)} of{" "}
+              {filteredSubmissions.length} applications
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <button
                 type="button"
                 data-testid="EL-090"
@@ -339,7 +442,9 @@ export default function ReviewerInbox() {
                 Previous
               </button>
 
-              <span style={{ fontSize: '13px', fontWeight: 600, padding: '0 8px' }}>
+              <span
+                style={{ fontSize: "13px", fontWeight: 600, padding: "0 8px" }}
+              >
                 Page {safePage} of {totalPages}
               </span>
 

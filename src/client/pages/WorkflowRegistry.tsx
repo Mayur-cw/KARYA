@@ -1,347 +1,281 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { StatusBadge } from '../components/StatusBadge';
-import { LoadingSkeleton } from '../components/LoadingSkeleton';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { EmptyState } from '../components/EmptyState';
-import { fetchCollection } from '../collections';
-
-interface WorkflowItem {
-  id: string;
-  departmentId: string;
-  title: string;
-  description: string;
-  status: 'draft' | 'published' | 'archived';
-  deadline?: string;
-  deadlinePolicy: {
-    initialDeadline: string;
-    allowLateResubmissions: boolean;
-  };
-  stages: Array<{ stageIndex: number; title: string; assignedReviewerId: string }>;
-  createdAt: string;
-  updatedAt: string;
-}
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { api } from "../api";
+import { StatusBadge } from "../components/StatusBadge";
+import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { EmptyState } from "../components/EmptyState";
+import { Icon } from "../components/Icon";
+import { Deadline } from "../components/Deadline";
+import type { WorkflowPage } from "../../shared/contracts";
 
 const PAGE_SIZE = 5;
-
 export default function WorkflowRegistry() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
+  const [params, setParams] = useSearchParams();
+  const [data, setData] = useState<WorkflowPage | null>(null);
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Read URL search params
-  const searchQuery = searchParams.get('q') || '';
-  const statusFilter = searchParams.get('status') || 'all';
-  const sortBy = searchParams.get('sort') || 'createdAt_desc';
-  const currentPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
-
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const search = params.get("q") || "";
+  const status = params.get("status") || "all";
+  const sort = params.get("sort") || "createdAt_desc";
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const [searchInput, setSearchInput] = useState(search);
+  const update = (key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value && value !== "all") next.set(key, value);
+    else next.delete(key);
+    if (key !== "page") next.delete("page");
+    setParams(next, { replace: key === "q" });
+  };
   useEffect(() => {
-    let mounted = true;
+    setSearchInput(search);
+  }, [search]);
+  useEffect(() => {
+    if (searchInput === search) return;
+    const timer = window.setTimeout(() => {
+      const next = new URLSearchParams(params);
+      if (searchInput) next.set("q", searchInput);
+      else next.delete("q");
+      next.delete("page");
+      setParams(next, { replace: true });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput, search, params, setParams]);
+  useEffect(() => {
+    let active = true;
     setLoading(true);
-    setErrorMsg(null);
-    fetchCollection<WorkflowItem>('/api/workflows')
-      .then((data) => {
-        if (mounted) setWorkflows(data || []);
+    setError(null);
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(PAGE_SIZE),
+      sort,
+    });
+    if (search) query.set("q", search);
+    if (status !== "all") query.set("status", status);
+    api<WorkflowPage>(`/api/workflows?${query}`)
+      .then((result) => {
+        if (active) setData(result);
       })
-      .catch((err: unknown) => {
-        if (mounted) setErrorMsg(err instanceof Error ? err.message : 'Failed to fetch workflows');
+      .catch((cause) => {
+        if (active)
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Unable to load workflows.",
+          );
       })
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (active) setLoading(false);
       });
-
     return () => {
-      mounted = false;
+      active = false;
     };
-  }, []);
-
-  const updateParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams);
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    if (key !== 'page') {
-      params.set('page', '1');
-    }
-    setSearchParams(params);
-  };
-
-  // Filter & Sort
-  const filteredWorkflows = useMemo(() => {
-    let result = [...workflows];
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (w) =>
-          w.title.toLowerCase().includes(q) ||
-          w.description?.toLowerCase().includes(q)
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      result = result.filter((w) => w.status === statusFilter);
-    }
-
-    result.sort((a, b) => {
-      if (sortBy === 'createdAt_asc') {
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      }
-      if (sortBy === 'title_asc') {
-        return a.title.localeCompare(b.title);
-      }
-      if (sortBy === 'deadline_asc') {
-        const da = a.deadline ? new Date(a.deadlinePolicy.initialDeadline).getTime() : 0;
-        const db = b.deadline ? new Date(b.deadlinePolicy.initialDeadline).getTime() : 0;
-        return da - db;
-      }
-      // default: createdAt_desc
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
-    return result;
-  }, [workflows, searchQuery, statusFilter, sortBy]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredWorkflows.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, currentPage), totalPages);
-  const pagedWorkflows = filteredWorkflows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  const hasNextPage = safePage < totalPages;
-  const hasPrevPage = safePage > 1;
-
+  }, [search, status, sort, page, retry]);
+  const total = data?.total || 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   return (
     <div className="workflow-registry-page" data-testid="page-p-004">
-      {/* Top Breadcrumb / Return */}
-      <div style={{ marginBottom: '16px' }}>
-        <Link to="/admin" data-testid="EL-023" className="btn btn-secondary btn-sm">
-          Back to Command Center
-        </Link>
-      </div>
-
-      <div className="card-header" style={{ marginBottom: '24px' }}>
+      <Link to="/admin" data-testid="EL-023" className="back-link">
+        <Icon name="grid" size={15} />
+        Command Center
+      </Link>
+      <div className="page-heading">
         <div>
-          <span className="badge badge-published" style={{ marginBottom: '8px' }}>
-            Process Registry
-          </span>
+          <p className="eyebrow">PROCESS LIBRARY</p>
           <h1>Workflow Registry</h1>
           <p className="card-subtitle">
-            Search, inspect, and track all institutional workflow circulars and approval pipelines.
+            Every process, with a clear owner and a next step.
           </p>
         </div>
         <button
           type="button"
           data-testid="EL-022"
           className="btn btn-primary"
-          onClick={() => navigate('/admin/studio')}
+          onClick={() => navigate("/admin/studio")}
         >
-          + Create Workflow
+          <Icon name="plus" size={18} />
+          Create Workflow
         </button>
       </div>
-
-      {errorMsg && (
+      {error && (
         <ErrorMessage
-          title="Registry Error"
-          message={errorMsg}
-          code="REGISTRY_LOAD_FAILED"
-          onRetry={() => window.location.reload()}
-          className="mb-4"
+          title="Workflows couldn’t be loaded"
+          message={error}
+          onRetry={() => setRetry((value) => value + 1)}
         />
       )}
-
-      {/* Filter Bar (EL-016, EL-017, EL-018) */}
-      <div
-        className="card"
-        style={{
-          padding: '16px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '16px',
-          alignItems: 'center',
-          backgroundColor: 'var(--bg-subtle)',
-        }}
-      >
-        {/* EL-016 Search Title */}
-        <div style={{ flex: '1 1 240px', minWidth: '200px' }}>
-          <label htmlFor="search-workflow-input" className="form-label" style={{ fontSize: '13px' }}>
-            Search Title
+      <section className="registry-toolbar card" aria-label="Filter workflows">
+        <div className="registry-search">
+          <label htmlFor="search-workflow-input" className="form-label">
+            Search workflows
           </label>
-          <input
-            id="search-workflow-input"
-            data-testid="EL-016"
-            type="search"
-            className="form-input"
-            placeholder="Search circular title..."
-            value={searchQuery}
-            onChange={(e) => updateParam('q', e.target.value)}
-            style={{ height: '40px', minHeight: '40px' }}
-          />
+          <div className="input-with-icon">
+            <Icon name="search" size={18} />
+            <input
+              id="search-workflow-input"
+              data-testid="EL-016"
+              className="form-input"
+              type="search"
+              placeholder="Find a workflow by title…"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+            />
+          </div>
         </div>
-
-        {/* EL-017 Status Filter */}
-        <div style={{ flex: '0 1 180px', minWidth: '150px' }}>
-          <label htmlFor="filter-workflow-status" className="form-label" style={{ fontSize: '13px' }}>
+        <div>
+          <label htmlFor="filter-workflow-status" className="form-label">
             Status
           </label>
           <select
             id="filter-workflow-status"
             data-testid="EL-017"
             className="form-select"
-            value={statusFilter}
-            onChange={(e) => updateParam('status', e.target.value)}
-            style={{ height: '40px', minHeight: '40px' }}
+            value={status}
+            onChange={(event) => update("status", event.target.value)}
           >
-            <option value="all">All Statuses</option>
+            <option value="all">All statuses</option>
             <option value="draft">Draft</option>
+            <option value="proposed">Proposed</option>
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </select>
         </div>
-
-        {/* EL-018 Sort By */}
-        <div style={{ flex: '0 1 200px', minWidth: '160px' }}>
-          <label htmlFor="sort-workflow-select" className="form-label" style={{ fontSize: '13px' }}>
-            Sort Order
+        <div>
+          <label htmlFor="sort-workflow-select" className="form-label">
+            Sort by
           </label>
           <select
             id="sort-workflow-select"
             data-testid="EL-018"
             className="form-select"
-            value={sortBy}
-            onChange={(e) => updateParam('sort', e.target.value)}
-            style={{ height: '40px', minHeight: '40px' }}
+            value={sort}
+            onChange={(event) => update("sort", event.target.value)}
           >
-            <option value="createdAt_desc">Newest First</option>
-            <option value="createdAt_asc">Oldest First</option>
+            <option value="createdAt_desc">Newest first</option>
+            <option value="createdAt_asc">Oldest first</option>
             <option value="title_asc">Title (A–Z)</option>
-            <option value="deadline_asc">Upcoming Deadline</option>
+            <option value="deadline_asc">Upcoming deadline</option>
           </select>
         </div>
+      </section>
+      <div className="results-heading">
+        <p role="status">
+          {loading
+            ? "Finding workflows…"
+            : `${total} ${total === 1 ? "workflow" : "workflows"}${search ? ` matching “${search}”` : " in your department"}`}
+        </p>
+        {(search || status !== "all") && (
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              setSearchInput("");
+              setParams(new URLSearchParams());
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
-
-      {/* Main Workflow Table */}
       {loading ? (
-        <LoadingSkeleton label="Loading registered workflows..." lines={6} />
-      ) : filteredWorkflows.length === 0 ? (
+        <LoadingSkeleton label="Loading registered workflows…" lines={5} />
+      ) : !data?.items.length ? (
         <EmptyState
           title="No matching workflows found"
           description={
-            searchQuery || statusFilter !== 'all'
-              ? 'Try adjusting your search criteria or resetting the status filter.'
-              : 'No workflows exist in this departmental scope. Create one to begin.'
+            search || status !== "all"
+              ? "Try another title or clear your filters to see all processes."
+              : "Create your first workflow from an official instruction."
           }
-          actionLabel={searchQuery || statusFilter !== 'all' ? 'Clear Filters' : 'Create Workflow'}
+          actionLabel={
+            search || status !== "all" ? "Clear filters" : "Create Workflow"
+          }
           onAction={() => {
-            if (searchQuery || statusFilter !== 'all') {
-              setSearchParams(new URLSearchParams());
-            } else {
-              navigate('/admin/studio');
-            }
+            if (search || status !== "all") {
+              setSearchInput("");
+              setParams(new URLSearchParams());
+            } else navigate("/admin/studio");
           }}
         />
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" aria-label="Workflow Registry Table">
-              <thead>
-                <tr>
-                  <th scope="col">Workflow Title</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Initial Deadline</th>
-                  <th scope="col">Stages</th>
-                  <th scope="col">Late Resubmissions</th>
-                  <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedWorkflows.map((wf) => (
-                  <tr key={wf.id}>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--ink-primary)' }}>{wf.title}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-                        ID: {wf.id.substring(0, 8)}... • Created {new Date(wf.createdAt).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td>
-                      <StatusBadge status={wf.status} />
-                    </td>
-                    <td>
-                      {wf.deadline
-                        ? new Date(wf.deadline!).toLocaleDateString()
-                        : 'Not specified'}
-                    </td>
-                    <td>
-                      <span className="badge badge-draft">{wf.stages?.length || 0} stages</span>
-                    </td>
-                    <td>
-                      <span style={{ color: 'var(--success)', fontSize: '14px' }}>Revisions allowed</span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <Link
-                        to={`/admin/workflows/${wf.id}`}
-                        data-testid="EL-021"
-                        className="btn btn-secondary btn-sm"
-                        aria-label={`Open ${wf.title}`}
-                      >
-                        Inspect
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <section
+          className="card registry-results"
+          aria-label="Workflow results"
+        >
+          <div className="registry-list">
+            {data.items.map((workflow) => (
+              <article className="registry-item" key={workflow.id}>
+                <span className="document-icon">
+                  <Icon name="file" size={23} />
+                </span>
+                <div className="registry-item-main">
+                  <div className="registry-item-title">
+                    <Link
+                      to={`/admin/workflows/${workflow.id}`}
+                      className="workflow-title"
+                    >
+                      {workflow.title}
+                    </Link>
+                    <StatusBadge status={workflow.status} />
+                  </div>
+                  <div className="registry-item-detail">
+                    <span>
+                      <Icon name="layers" size={14} />
+                      {workflow.stages.length} review stages
+                    </span>
+                    <span>
+                      <Icon name="clock" size={14} />
+                      <Deadline value={workflow.deadline} />
+                    </span>
+                    <span>Version {workflow.version}</span>
+                  </div>
+                </div>
+                <Link
+                  to={`/admin/workflows/${workflow.id}`}
+                  data-testid="EL-021"
+                  className="btn btn-secondary btn-sm"
+                  aria-label={`Open ${workflow.title}`}
+                >
+                  Inspect
+                  <Icon name="file" size={15} />
+                </Link>
+              </article>
+            ))}
           </div>
-
-          {/* Pagination Controls (EL-019, EL-020) */}
-          <div
-            style={{
-              padding: '16px 20px',
-              borderTop: '1px solid var(--border-light)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              backgroundColor: 'var(--bg-subtle)',
-            }}
-          >
-            <div style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-              Showing {(safePage - 1) * PAGE_SIZE + 1}–
-              {Math.min(safePage * PAGE_SIZE, filteredWorkflows.length)} of {filteredWorkflows.length} workflows
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="pagination-bar">
+            <span>
+              Showing {(page - 1) * PAGE_SIZE + 1}–
+              {Math.min(page * PAGE_SIZE, total)} of {total}
+            </span>
+            <div>
               <button
                 type="button"
                 data-testid="EL-020"
                 className="btn btn-secondary btn-sm"
-                onClick={() => updateParam('page', String(safePage - 1))}
-                disabled={!hasPrevPage}
+                disabled={page <= 1}
+                onClick={() => update("page", String(page - 1))}
                 aria-label="Previous workflow results"
               >
                 Previous
               </button>
-
-              <span style={{ fontSize: '13px', fontWeight: 600, padding: '0 8px' }}>
-                Page {safePage} of {totalPages}
+              <span className="page-indicator">
+                {page} / {pages}
               </span>
-
               <button
                 type="button"
                 data-testid="EL-019"
                 className="btn btn-secondary btn-sm"
-                onClick={() => updateParam('page', String(safePage + 1))}
-                disabled={!hasNextPage}
+                disabled={page >= pages}
+                onClick={() => update("page", String(page + 1))}
                 aria-label="Next workflow results"
               >
                 Next
               </button>
             </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

@@ -1,14 +1,15 @@
-import express from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
-import { rateLimit } from 'express-rate-limit';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { getConfig } from './config.js';
-import crypto from 'node:crypto';
-import { demoAccess } from './demo-access.js';
-import { refreshDueReminders } from './reminders.js';
-import { isPresentationEnabled } from './presentation-seed.js';
+import { handleDashboardSummary } from "./modules/dashboard-summary.js";
+import express from "express";
+import helmet from "helmet";
+import cors from "cors";
+import { rateLimit } from "express-rate-limit";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { getConfig } from "./config.js";
+import crypto from "node:crypto";
+import { demoAccess } from "./demo-access.js";
+import { refreshDueReminders } from "./reminders.js";
+import { isPresentationEnabled } from "./presentation-seed.js";
 import {
   authenticate,
   requireAuth,
@@ -16,7 +17,7 @@ import {
   requireAnonymous,
   checkStudentOwnership,
   denyPrivateObject,
-} from './authz.js';
+} from "./authz.js";
 import {
   csrfProtection,
   loginRateLimiter,
@@ -28,14 +29,14 @@ import {
   clearSessionCookie,
   parseCookies,
   SESSION_COOKIE_NAME,
-} from './security.js';
+} from "./security.js";
 import {
   handlePostDocument,
   handleGetDocument,
   handlePatchDocument,
   handleDeleteDocument,
   handleProposeWorkflow,
-} from './modules/private-source-extraction-ai-proposal-adapter.js';
+} from "./modules/private-source-extraction-ai-proposal-adapter.js";
 import {
   handlePostWorkflow,
   handleGetWorkflows,
@@ -43,7 +44,7 @@ import {
   handlePatchWorkflow,
   handlePublishWorkflow,
   handleArchiveWorkflow,
-} from './modules/workflow-draft-publish-gate.js';
+} from "./modules/workflow-draft-publish-gate.js";
 import {
   handleGetUsers,
   handlePostUser,
@@ -53,7 +54,7 @@ import {
   handlePostWorkflowAssignments,
   handlePatchAssignment,
   handleDeleteAssignment,
-} from './modules/cohort-eligibility-assignee-policies.js';
+} from "./modules/cohort-eligibility-assignee-policies.js";
 import {
   handlePostWorkflowSubmissions,
   handleGetSubmissions,
@@ -61,38 +62,38 @@ import {
   handlePatchSubmission,
   handleSubmitSubmission,
   handleDeleteSubmission,
-} from './modules/dynamic-submissions-deadlines.js';
-import { handlePostSubmissionDecision } from './modules/multi-stage-review-atomics.js';
+} from "./modules/dynamic-submissions-deadlines.js";
+import { handlePostSubmissionDecision } from "./modules/multi-stage-review-atomics.js";
 import {
   handlePostAttachment,
   handleGetAttachment,
   handlePatchAttachment,
   handleDeleteAttachment,
-} from './modules/private-upload-references-file-streaming.js';
+} from "./modules/private-upload-references-file-streaming.js";
 import {
   handleGetNotifications,
   handlePatchNotification,
   handleDeleteNotification,
   handleGetWorkflowAnalytics,
-} from './modules/notification-delivery-live-dashboards.js';
+} from "./modules/notification-delivery-live-dashboards.js";
 import {
   handleGetAuditLogs,
   handleGetWorkflowReportCsv,
   handleGetHealthz,
-} from './modules/audit-explorer-csv-report-healthz.js';
+} from "./modules/audit-explorer-csv-report-healthz.js";
 import {
   createSession,
   deleteSessionByToken,
   SEEDED_USERS,
-} from './session.js';
-import { getDb, UserRepository } from './repository.js';
-import { demoLoginRequestSchema } from '../shared/contracts.js';
+} from "./session.js";
+import { getDb, UserRepository } from "./repository.js";
+import { demoLoginRequestSchema } from "../shared/contracts.js";
 
 export function createApp() {
   const config = getConfig();
   const app = express();
-  app.set('trust proxy', config.TRUST_PROXY_HOPS);
-  app.disable('x-powered-by');
+  app.set("trust proxy", config.TRUST_PROXY_HOPS);
+  app.disable("x-powered-by");
 
   app.use(
     helmet({
@@ -101,7 +102,7 @@ export function createApp() {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'"],
-          imgSrc: ["'self'", 'data:', 'blob:'],
+          imgSrc: ["'self'", "data:", "blob:"],
           frameAncestors: ["'none'"],
           formAction: ["'self'"],
           baseUri: ["'self'"],
@@ -109,66 +110,93 @@ export function createApp() {
           connectSrc: ["'self'"],
         },
       },
-    })
+    }),
   );
 
   app.use(
     cors({
       origin: (origin, cb) => {
-        const allowed = config.ALLOWED_ORIGINS.split(',').map(value => value.trim());
+        const allowed = config.ALLOWED_ORIGINS.split(",").map((value) =>
+          value.trim(),
+        );
         // Same-origin requests need no CORS headers. Cross-origin clients require an exact allowlist entry.
         cb(null, !origin || allowed.includes(origin));
       },
       credentials: true,
-    })
+    }),
   );
 
   app.use(
     rateLimit({
       windowMs: 15 * 60_000,
       limit: 500,
-      standardHeaders: 'draft-8',
+      standardHeaders: "draft-8",
       legacyHeaders: false,
-    })
+    }),
   );
 
   app.use(demoAccess(config.DEMO_ACCESS_PASSWORD));
   app.use((_req, res, next) => {
     res.locals.requestId = crypto.randomUUID();
-    res.setHeader('X-Request-Id', res.locals.requestId);
-    if (process.env.RENDER_GIT_COMMIT) res.setHeader('X-Karya-Revision', process.env.RENDER_GIT_COMMIT.slice(0, 12));
+    res.setHeader("X-Request-Id", res.locals.requestId);
+    if (process.env.RENDER_GIT_COMMIT)
+      res.setHeader(
+        "X-Karya-Revision",
+        process.env.RENDER_GIT_COMMIT.slice(0, 12),
+      );
     next();
   });
-  app.use(express.json({ limit: '64kb' }));
-  app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+  app.use(express.json({ limit: "64kb" }));
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
 
   // Health check endpoints (EP-040 + /healthz)
-  app.get('/healthz', handleGetHealthz);
-  app.get('/api/healthz', handleGetHealthz);
+  app.get("/healthz", handleGetHealthz);
+  app.get("/api/healthz", handleGetHealthz);
 
   // Attach authentication context to all API routes
-  app.use('/api', (req, res, next) => {
-    const origin = req.get('origin');
-    const sameOrigin = `${req.protocol}://${req.get('host')}`;
-    const allowed = config.ALLOWED_ORIGINS.split(',').map(value => value.trim());
-    if (origin && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && origin !== sameOrigin && !allowed.includes(origin)) {
-      res.status(403).json({ code: 'FORBIDDEN', message: 'Request origin is not permitted.' });
+  app.use("/api", (req, res, next) => {
+    const origin = req.get("origin");
+    const sameOrigin = `${req.protocol}://${req.get("host")}`;
+    const allowed = config.ALLOWED_ORIGINS.split(",").map((value) =>
+      value.trim(),
+    );
+    if (
+      origin &&
+      !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
+      origin !== sameOrigin &&
+      !allowed.includes(origin)
+    ) {
+      res.status(403).json({
+        code: "FORBIDDEN",
+        message: "Request origin is not permitted.",
+      });
       return;
     }
     next();
   });
-  app.use('/api', authenticate);
+  app.use("/api", authenticate);
 
   // CSRF protection for mutating API requests
-  app.use('/api', csrfProtection);
+  app.use("/api", csrfProtection);
 
   // ==========================================
   // Auth Endpoints (EP-001, EP-002, EP-003)
   // ==========================================
 
-  const requireDemoMode: import('express').RequestHandler = (_req, res, next) => {
-    if (config.DEMO_MODE !== 'true') {
-      res.status(403).json({ code: 'DEMO_DISABLED', message: 'Demo sign-in is disabled. Contact your administrator for access.' });
+  const requireDemoMode: import("express").RequestHandler = (
+    _req,
+    res,
+    next,
+  ) => {
+    if (config.DEMO_MODE !== "true") {
+      res.status(403).json({
+        code: "DEMO_DISABLED",
+        message:
+          "Demo sign-in is disabled. Contact your administrator for access.",
+      });
       return;
     }
     next();
@@ -176,20 +204,44 @@ export function createApp() {
 
   const startDemoSession: express.RequestHandler = (req, res) => {
     const result = demoLoginRequestSchema.safeParse(req.body);
-    if (!result.success) { res.status(400).json({ code: 'INVALID_INPUT', message: 'Missing or malformed userId' }); return; }
-    const allowlisted = SEEDED_USERS.some(user => user.id === result.data.userId);
-    const user = allowlisted ? new UserRepository(getDb()).getById(result.data.userId) : null;
-    if (!user?.active) { res.status(404).json({ code: 'NOT_FOUND', message: 'This demo account is unavailable.' }); return; }
+    if (!result.success) {
+      res.status(400).json({
+        code: "INVALID_INPUT",
+        message: "Missing or malformed userId",
+      });
+      return;
+    }
+    const allowlisted = SEEDED_USERS.some(
+      (user) => user.id === result.data.userId,
+    );
+    const user = allowlisted
+      ? new UserRepository(getDb()).getById(result.data.userId)
+      : null;
+    if (!user?.active) {
+      res.status(404).json({
+        code: "NOT_FOUND",
+        message: "This demo account is unavailable.",
+      });
+      return;
+    }
     const previous = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
     if (previous) deleteSessionByToken(previous);
     const { sessionToken, csrfToken } = createSession(user);
     setSessionCookie(res, sessionToken);
-    res.status(req.path === '/api/session' ? 200 : 201).json({ user, csrfToken });
+    res
+      .status(req.path === "/api/session" ? 200 : 201)
+      .json({ user, csrfToken });
   };
-  app.post('/api/auth/demo-login', requireDemoMode, requireAnonymous, loginRateLimiter, startDemoSession);
+  app.post(
+    "/api/auth/demo-login",
+    requireDemoMode,
+    requireAnonymous,
+    loginRateLimiter,
+    startDemoSession,
+  );
 
   // EP-002 GET /api/auth/me
-  app.get('/api/auth/me', requireAuth, (_req, res) => {
+  app.get("/api/auth/me", requireAuth, (_req, res) => {
     const user = res.locals.principal;
     const csrfToken = res.locals.session?.csrfToken;
     res.status(200).json({
@@ -199,10 +251,10 @@ export function createApp() {
   });
 
   // EP-003 POST /api/auth/logout
-  app.post('/api/auth/logout', requireAuth, (req, res) => {
+  app.post("/api/auth/logout", requireAuth, (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
     let sessionToken = cookies[SESSION_COOKIE_NAME];
-    if (!sessionToken && req.headers.authorization?.startsWith('Bearer ')) {
+    if (!sessionToken && req.headers.authorization?.startsWith("Bearer ")) {
       sessionToken = req.headers.authorization.slice(7).trim();
     }
     if (sessionToken) {
@@ -213,31 +265,34 @@ export function createApp() {
   });
 
   // Demo identities list (for P-002 dropdown in DEMO_MODE)
-  app.get('/api/auth/demo-users', requireDemoMode, (_req, res) => {
+  app.get("/api/auth/demo-users", requireDemoMode, (_req, res) => {
     res.status(200).json({
       items: SEEDED_USERS,
     });
   });
 
   // Direct session endpoints for client SPA state lifecycle
-  app.get('/api/session', (req, res) => {
+  app.get("/api/session", (req, res) => {
     const user = res.locals.principal ?? null;
-    const csrfToken = res.locals.session?.csrfToken ?? '';
+    const csrfToken = res.locals.session?.csrfToken ?? "";
     res.status(200).json({
       user,
       csrfToken,
-      demoMode: config.DEMO_MODE === 'true',
+      demoMode: config.DEMO_MODE === "true",
       presentationMode: isPresentationEnabled(),
-      demoActors: config.DEMO_MODE === 'true' ? SEEDED_USERS.filter(candidate => candidate.active) : [],
+      demoActors:
+        config.DEMO_MODE === "true"
+          ? SEEDED_USERS.filter((candidate) => candidate.active)
+          : [],
     });
   });
 
-  app.post('/api/session', requireDemoMode, loginRateLimiter, startDemoSession);
+  app.post("/api/session", requireDemoMode, loginRateLimiter, startDemoSession);
 
-  app.delete('/api/session', (req, res) => {
+  app.delete("/api/session", (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
     let sessionToken = cookies[SESSION_COOKIE_NAME];
-    if (!sessionToken && req.headers.authorization?.startsWith('Bearer ')) {
+    if (!sessionToken && req.headers.authorization?.startsWith("Bearer ")) {
       sessionToken = req.headers.authorization.slice(7).trim();
     }
     if (sessionToken) {
@@ -248,7 +303,7 @@ export function createApp() {
   });
 
   // Dedicated unread notification count
-  app.get('/api/notifications/unread-count', (req, res) => {
+  app.get("/api/notifications/unread-count", (req, res) => {
     const principal = res.locals.principal;
     if (!principal) {
       res.json({ count: 0 });
@@ -260,105 +315,326 @@ export function createApp() {
       SELECT COUNT(*) as count FROM notifications
       WHERE recipientId = ? AND readAt IS NULL AND dismissedAt IS NULL
     `);
-    const unreadRow = unreadStmt.get(principal.id) as { count: number } | undefined;
+    const unreadRow = unreadStmt.get(principal.id) as
+      | { count: number }
+      | undefined;
     res.json({ count: unreadRow ? unreadRow.count : 0 });
   });
 
   // EP-004..EP-007: User & Identity Management
-  app.get('/api/users', requireRoles('admin'), readRateLimiter, handleGetUsers);
-  app.post('/api/users', requireRoles('admin'), writeRateLimiter, handlePostUser);
-  app.get('/api/users/:userId', requireAuth, readRateLimiter, handleGetUserById);
-  app.patch('/api/users/:userId', requireAuth, writeRateLimiter, handlePatchUserById);
+  app.get("/api/users", requireRoles("admin"), readRateLimiter, handleGetUsers);
+  app.post(
+    "/api/users",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handlePostUser,
+  );
+  app.get(
+    "/api/users/:userId",
+    requireAuth,
+    readRateLimiter,
+    handleGetUserById,
+  );
+  app.patch(
+    "/api/users/:userId",
+    requireAuth,
+    writeRateLimiter,
+    handlePatchUserById,
+  );
 
   // EP-019..EP-022: Assignment & Cohort Management
-  app.get('/api/assignments', requireRoles('admin', 'student'), readRateLimiter, handleGetAssignments);
-  app.post('/api/workflows/:workflowId/assignments', requireRoles('admin'), writeRateLimiter, handlePostWorkflowAssignments);
-  app.patch('/api/assignments/:assignmentId', requireRoles('admin'), writeRateLimiter, handlePatchAssignment);
-  app.delete('/api/assignments/:assignmentId', requireRoles('admin'), writeRateLimiter, handleDeleteAssignment);
+  app.get(
+    "/api/assignments",
+    requireRoles("admin", "student"),
+    readRateLimiter,
+    handleGetAssignments,
+  );
+  app.post(
+    "/api/workflows/:workflowId/assignments",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handlePostWorkflowAssignments,
+  );
+  app.patch(
+    "/api/assignments/:assignmentId",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handlePatchAssignment,
+  );
+  app.delete(
+    "/api/assignments/:assignmentId",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handleDeleteAssignment,
+  );
 
   // EP-023..EP-028: Dynamic Submissions and Deadlines
-  app.post('/api/workflows/:workflowId/submissions', requireRoles('student'), writeRateLimiter, handlePostWorkflowSubmissions);
-  app.get('/api/submissions', requireAuth, readRateLimiter, handleGetSubmissions);
-  app.get('/api/submissions/:submissionId', requireAuth, readRateLimiter, handleGetSubmissionById);
-  app.patch('/api/submissions/:submissionId', requireRoles('student'), writeRateLimiter, handlePatchSubmission);
-  app.post('/api/submissions/:submissionId/submit', requireRoles('student'), writeRateLimiter, handleSubmitSubmission);
-  app.delete('/api/submissions/:submissionId', requireRoles('student'), writeRateLimiter, handleDeleteSubmission);
+  app.post(
+    "/api/workflows/:workflowId/submissions",
+    requireRoles("student"),
+    writeRateLimiter,
+    handlePostWorkflowSubmissions,
+  );
+  app.get(
+    "/api/submissions",
+    requireAuth,
+    readRateLimiter,
+    handleGetSubmissions,
+  );
+  app.get(
+    "/api/submissions/:submissionId",
+    requireAuth,
+    readRateLimiter,
+    handleGetSubmissionById,
+  );
+  app.patch(
+    "/api/submissions/:submissionId",
+    requireRoles("student"),
+    writeRateLimiter,
+    handlePatchSubmission,
+  );
+  app.post(
+    "/api/submissions/:submissionId/submit",
+    requireRoles("student"),
+    writeRateLimiter,
+    handleSubmitSubmission,
+  );
+  app.delete(
+    "/api/submissions/:submissionId",
+    requireRoles("student"),
+    writeRateLimiter,
+    handleDeleteSubmission,
+  );
 
   // EP-029: Multi-Stage Review Decision (Reviewer only)
-  app.post('/api/submissions/:submissionId/decision', requireRoles('reviewer'), writeRateLimiter, handlePostSubmissionDecision);
+  app.post(
+    "/api/submissions/:submissionId/decision",
+    requireRoles("reviewer"),
+    writeRateLimiter,
+    handlePostSubmissionDecision,
+  );
 
   // EP-036..EP-039: Private Upload References & File Streaming
   app.post(
-    '/api/submissions/:submissionId/attachments',
-    requireRoles('student'),
+    "/api/submissions/:submissionId/attachments",
+    requireRoles("student"),
     uploadRateLimiter,
-    express.raw({ type: () => true, limit: '6mb' }),
-    handlePostAttachment
+    express.raw({ type: () => true, limit: "6mb" }),
+    handlePostAttachment,
   );
-  app.get('/api/attachments/:attachmentId', requireAuth, readRateLimiter, handleGetAttachment);
-  app.patch('/api/attachments/:attachmentId', requireRoles('student'), writeRateLimiter, handlePatchAttachment);
-  app.delete('/api/attachments/:attachmentId', requireRoles('student'), writeRateLimiter, handleDeleteAttachment);
+  app.get(
+    "/api/attachments/:attachmentId",
+    requireAuth,
+    readRateLimiter,
+    handleGetAttachment,
+  );
+  app.patch(
+    "/api/attachments/:attachmentId",
+    requireRoles("student"),
+    writeRateLimiter,
+    handlePatchAttachment,
+  );
+  app.delete(
+    "/api/attachments/:attachmentId",
+    requireRoles("student"),
+    writeRateLimiter,
+    handleDeleteAttachment,
+  );
 
   // EP-030..EP-032: Notification Delivery & Management
-  app.get('/api/notifications', requireAuth, readRateLimiter, handleGetNotifications);
-  app.patch('/api/notifications/:notificationId', requireAuth, writeRateLimiter, handlePatchNotification);
-  app.delete('/api/notifications/:notificationId', requireAuth, writeRateLimiter, handleDeleteNotification);
+  app.get(
+    "/api/notifications",
+    requireAuth,
+    readRateLimiter,
+    handleGetNotifications,
+  );
+  app.patch(
+    "/api/notifications/:notificationId",
+    requireAuth,
+    writeRateLimiter,
+    handlePatchNotification,
+  );
+  app.delete(
+    "/api/notifications/:notificationId",
+    requireAuth,
+    writeRateLimiter,
+    handleDeleteNotification,
+  );
 
   // EP-034: Workflow Analytics & Live Dashboard (Admin only)
-  app.get('/api/workflows/:workflowId/analytics', requireRoles('admin'), readRateLimiter, handleGetWorkflowAnalytics);
+  app.get(
+    "/api/workflows/:workflowId/analytics",
+    requireRoles("admin"),
+    readRateLimiter,
+    handleGetWorkflowAnalytics,
+  );
 
   // EP-033: Audit Explorer (Admin only)
-  app.get('/api/audit', requireRoles('admin'), readRateLimiter, handleGetAuditLogs);
+  app.get(
+    "/api/audit",
+    requireRoles("admin"),
+    readRateLimiter,
+    handleGetAuditLogs,
+  );
 
   // EP-035: Workflow CSV Report Export (Admin only)
-  app.get('/api/workflows/:workflowId/report.csv', requireRoles('admin'), readRateLimiter, handleGetWorkflowReportCsv);
+  app.get(
+    "/api/workflows/:workflowId/report.csv",
+    requireRoles("admin"),
+    readRateLimiter,
+    handleGetWorkflowReportCsv,
+  );
 
-  if (config.NODE_ENV === 'test') {
-  // Route stub for testing student object isolation (IDOR guard)
-  app.get('/api/submissions/:submissionId/test-scope', requireAuth, (req, res) => {
-    const principal = res.locals.principal!;
-    const targetStudentId = req.query.ownerStudentId as string;
-    if (principal.role === 'student' && !checkStudentOwnership(principal, targetStudentId)) {
-      denyPrivateObject(res);
-      return;
-    }
-    res.status(200).json({ status: 'ok', ownerStudentId: targetStudentId });
-  });
-
+  if (config.NODE_ENV === "test") {
+    // Route stub for testing student object isolation (IDOR guard)
+    app.get(
+      "/api/submissions/:submissionId/test-scope",
+      requireAuth,
+      (req, res) => {
+        const principal = res.locals.principal!;
+        const targetStudentId = req.query.ownerStudentId as string;
+        if (
+          principal.role === "student" &&
+          !checkStudentOwnership(principal, targetStudentId)
+        ) {
+          denyPrivateObject(res);
+          return;
+        }
+        res.status(200).json({ status: "ok", ownerStudentId: targetStudentId });
+      },
+    );
   }
 
   // EP-008..EP-011: Document Management (Admin only)
-  app.post('/api/documents', requireRoles('admin'), uploadRateLimiter, express.raw({ type: ['application/pdf', 'text/plain'], limit: '5mb' }), handlePostDocument);
-  app.get('/api/documents/:documentId', requireRoles('admin'), handleGetDocument);
-  app.patch('/api/documents/:documentId', requireRoles('admin'), handlePatchDocument);
-  app.delete('/api/documents/:documentId', requireRoles('admin'), handleDeleteDocument);
+  app.post(
+    "/api/documents",
+    requireRoles("admin"),
+    uploadRateLimiter,
+    express.raw({ type: ["application/pdf", "text/plain"], limit: "5mb" }),
+    handlePostDocument,
+  );
+  app.get(
+    "/api/documents/:documentId",
+    requireRoles("admin"),
+    handleGetDocument,
+  );
+  app.patch(
+    "/api/documents/:documentId",
+    requireRoles("admin"),
+    handlePatchDocument,
+  );
+  app.delete(
+    "/api/documents/:documentId",
+    requireRoles("admin"),
+    handleDeleteDocument,
+  );
 
   // EP-016: Workflow Proposal Generation (Admin only)
-  app.post('/api/workflows/:workflowId/propose', requireRoles('admin'), aiRateLimiter, handleProposeWorkflow);
+  app.post(
+    "/api/workflows/:workflowId/propose",
+    requireRoles("admin"),
+    aiRateLimiter,
+    handleProposeWorkflow,
+  );
 
   // EP-012..EP-018: Workflow Lifecycle & Publish Gate
-  app.post('/api/workflows', requireRoles('admin'), writeRateLimiter, handlePostWorkflow);
-  app.get('/api/workflows', requireAuth, readRateLimiter, handleGetWorkflows);
-  app.get('/api/workflows/:workflowId', requireAuth, readRateLimiter, handleGetWorkflowById);
-  app.patch('/api/workflows/:workflowId', requireRoles('admin'), writeRateLimiter, handlePatchWorkflow);
-  app.post('/api/workflows/:workflowId/publish', requireRoles('admin'), writeRateLimiter, handlePublishWorkflow);
-  app.post('/api/workflows/:workflowId/archive', requireRoles('admin'), writeRateLimiter, handleArchiveWorkflow);
+  app.post(
+    "/api/workflows",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handlePostWorkflow,
+  );
+  app.get(
+    "/api/dashboard",
+    requireRoles("admin"),
+    readRateLimiter,
+    handleDashboardSummary,
+  );
+  app.get("/api/workflows", requireAuth, readRateLimiter, handleGetWorkflows);
+  app.get(
+    "/api/workflows/:workflowId",
+    requireAuth,
+    readRateLimiter,
+    handleGetWorkflowById,
+  );
+  app.patch(
+    "/api/workflows/:workflowId",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handlePatchWorkflow,
+  );
+  app.post(
+    "/api/workflows/:workflowId/publish",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handlePublishWorkflow,
+  );
+  app.post(
+    "/api/workflows/:workflowId/archive",
+    requireRoles("admin"),
+    writeRateLimiter,
+    handleArchiveWorkflow,
+  );
 
   // Unknown API paths return JSON instead of falling through to the SPA.
-  app.use('/api', (_req, res) => { res.status(404).json({ code: 'NOT_FOUND', message: 'API endpoint not found.' }); });
+  app.use("/api", (_req, res) => {
+    res
+      .status(404)
+      .json({ code: "NOT_FOUND", message: "API endpoint not found." });
+  });
   const dirname = path.dirname(fileURLToPath(import.meta.url));
-  const staticDir = path.resolve(dirname, '../../dist/client');
-  app.use(express.static(staticDir, { maxAge: '1h', index: false, setHeaders: (res, file) => {
-    if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  } }));
-  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.sendFile(path.join(staticDir, 'index.html')); });
-  const errorHandler: express.ErrorRequestHandler = (error: unknown, _req, res, next) => {
-    if (res.headersSent) { next(error); return; }
+  const staticDir = path.resolve(dirname, "../../dist/client");
+  app.use(
+    express.static(staticDir, {
+      maxAge: "1h",
+      index: false,
+      setHeaders: (res, file) => {
+        if (file.includes(`${path.sep}assets${path.sep}`))
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      },
+    }),
+  );
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.sendFile(path.join(staticDir, "index.html"));
+  });
+  const errorHandler: express.ErrorRequestHandler = (
+    error: unknown,
+    _req,
+    res,
+    next,
+  ) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
     const status = (error as { status?: number })?.status;
     const safeStatus = status === 413 ? 413 : status === 400 ? 400 : 500;
-    const message = safeStatus === 413 ? 'Request exceeds the supported size.' : safeStatus === 400 ? 'Invalid request payload.' : 'Unable to complete the request. Please try again.';
-    if (safeStatus === 500) process.stderr.write(JSON.stringify({ level: 'error', requestId: res.locals.requestId, event: 'request_failed', name: error instanceof Error ? error.name : 'UnknownError' }) + '\n');
-    res.status(safeStatus).json({ code: safeStatus === 413 ? 'PAYLOAD_TOO_LARGE' : safeStatus === 400 ? 'INVALID_INPUT' : 'INTERNAL_ERROR', message, requestId: res.locals.requestId });
+    const message =
+      safeStatus === 413
+        ? "Request exceeds the supported size."
+        : safeStatus === 400
+          ? "Invalid request payload."
+          : "Unable to complete the request. Please try again.";
+    if (safeStatus === 500)
+      process.stderr.write(
+        JSON.stringify({
+          level: "error",
+          requestId: res.locals.requestId,
+          event: "request_failed",
+          name: error instanceof Error ? error.name : "UnknownError",
+        }) + "\n",
+      );
+    res.status(safeStatus).json({
+      code:
+        safeStatus === 413
+          ? "PAYLOAD_TOO_LARGE"
+          : safeStatus === 400
+            ? "INVALID_INPUT"
+            : "INTERNAL_ERROR",
+      message,
+      requestId: res.locals.requestId,
+    });
   };
   app.use(errorHandler);
   return app;

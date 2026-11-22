@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../components/AuthContext';
-import { StatusBadge } from '../components/StatusBadge';
-import { LoadingSkeleton } from '../components/LoadingSkeleton';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { Dialog } from '../components/Dialog';
-import { api } from '../api';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../components/AuthContext";
+import { StatusBadge } from "../components/StatusBadge";
+import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { Dialog } from "../components/Dialog";
+import { api } from "../api";
 
 interface AttachmentItem {
   id: string;
@@ -21,7 +21,7 @@ interface DecisionRecord {
   stageIndex: number;
   reviewerId: string;
   reviewerName?: string;
-  action: 'approve' | 'needs_changes' | 'reject';
+  action: "approve" | "needs_changes" | "reject";
   reason?: string;
   decidedAt: string;
 }
@@ -40,7 +40,12 @@ interface WorkflowDetail {
       description?: string;
     }>;
   };
-  fields?: Array<{ key: string; label: string; type: string; required: boolean }>;
+  fields?: Array<{
+    key: string;
+    label: string;
+    type: string;
+    required: boolean;
+  }>;
   stages: Array<{
     label: string;
     reviewerId: string;
@@ -54,7 +59,13 @@ interface SubmissionDetail {
   studentId: string;
   assignmentId?: string;
   answers: Record<string, unknown>;
-  status: 'draft' | 'submitted' | 'in_review' | 'needs_changes' | 'approved' | 'rejected';
+  status:
+    | "draft"
+    | "submitted"
+    | "in_review"
+    | "needs_changes"
+    | "approved"
+    | "rejected";
   stageIndex: number;
   revision: number;
   version: number;
@@ -83,12 +94,15 @@ export default function ReviewWorkbench() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // EL-098 Feedback text
-  const [feedback, setFeedback] = useState('');
-  const [decisionType, setDecisionType] = useState<'approve' | 'needs_changes' | 'reject' | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const [decisionType, setDecisionType] = useState<
+    "approve" | "needs_changes" | "reject" | null
+  >(null);
 
   // Modals & expansions (EL-097, EL-099, EL-102)
   const [showRequirementsModal, setShowRequirementsModal] = useState(false);
-  const [showDecisionConfirmModal, setShowDecisionConfirmModal] = useState(false);
+  const [showDecisionConfirmModal, setShowDecisionConfirmModal] =
+    useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [submittingDecision, setSubmittingDecision] = useState(false);
 
@@ -103,19 +117,27 @@ export default function ReviewWorkbench() {
     if (!submissionId) return;
     try {
       setErrorMsg(null);
-      const subData = await api<SubmissionDetail>(`/api/submissions/${submissionId}`);
+      const subData = await api<SubmissionDetail>(
+        `/api/submissions/${submissionId}`,
+      );
       setSubmission(subData);
 
       if (subData.workflowId) {
         try {
-          const wfData = await api<WorkflowDetail>(`/api/workflows/${subData.workflowId}`);
+          const wfData = await api<WorkflowDetail>(
+            `/api/workflows/${subData.workflowId}`,
+          );
           setWorkflow(wfData);
         } catch {
           // Non-blocking if workflow fails
         }
       }
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load submission details');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "Failed to load submission details",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -130,7 +152,7 @@ export default function ReviewWorkbench() {
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadData();
-    showToast('Submission details refreshed');
+    showToast("Submission details refreshed");
   };
 
   // EL-103 Copy submission reference
@@ -148,12 +170,14 @@ export default function ReviewWorkbench() {
 
   // EL-095 Read attached evidence
   const handleDownloadAttachment = (attId: string) => {
-    window.open(`/api/attachments/${attId}`, '_blank');
-    showToast('Evidence file securely requested');
+    window.open(`/api/attachments/${attId}`, "_blank");
+    showToast("Evidence file securely requested");
   };
 
   // Open Decision Dialog
-  const handleOpenDecisionDialog = (type: 'approve' | 'needs_changes' | 'reject') => {
+  const handleOpenDecisionDialog = (
+    type: "approve" | "needs_changes" | "reject",
+  ) => {
     setDecisionType(type);
     setShowDecisionConfirmModal(true);
   };
@@ -162,8 +186,13 @@ export default function ReviewWorkbench() {
   const handleSubmitDecision = async () => {
     if (!submission || !decisionType) return;
 
-    if ((decisionType === 'needs_changes' || decisionType === 'reject') && feedback.trim().length < 10) {
-      setErrorMsg('A detailed reason (at least 10 characters) is required when requesting revisions or rejecting an application.');
+    if (
+      (decisionType === "needs_changes" || decisionType === "reject") &&
+      feedback.trim().length < 10
+    ) {
+      setErrorMsg(
+        "A detailed reason (at least 10 characters) is required when requesting revisions or rejecting an application.",
+      );
       return;
     }
 
@@ -172,7 +201,7 @@ export default function ReviewWorkbench() {
       setErrorMsg(null);
 
       await api(`/api/submissions/${submission.id}/decision`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({
           action: decisionType,
           reason: feedback.trim(),
@@ -182,20 +211,22 @@ export default function ReviewWorkbench() {
 
       setShowDecisionConfirmModal(false);
       showToast(
-        decisionType === 'approve'
-          ? 'Stage decision saved; next reviewer notified or final approval recorded.'
-          : decisionType === 'needs_changes'
-          ? 'Revisions requested. Student has been notified to resubmit.'
-          : 'Final rejection recorded and student notified.'
+        decisionType === "approve"
+          ? "Stage decision saved; next reviewer notified or final approval recorded."
+          : decisionType === "needs_changes"
+            ? "Revisions requested. Student has been notified to resubmit."
+            : "Final rejection recorded and student notified.",
       );
 
       // Navigate back to reviewer inbox
       setTimeout(() => {
-        navigate('/reviewer');
+        navigate("/reviewer");
       }, 1000);
     } catch (err: unknown) {
       setShowDecisionConfirmModal(false);
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to record stage decision');
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to record stage decision",
+      );
       // On conflict, refresh to get current version
       await loadData();
     } finally {
@@ -205,7 +236,11 @@ export default function ReviewWorkbench() {
 
   if (loading) {
     return (
-      <div className="review-workbench-page" data-testid="page-p-013" style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      <div
+        className="review-workbench-page"
+        data-testid="page-p-013"
+        style={{ maxWidth: "1100px", margin: "0 auto" }}
+      >
         <LoadingSkeleton label="Loading review workbench..." lines={8} />
       </div>
     );
@@ -213,7 +248,11 @@ export default function ReviewWorkbench() {
 
   if (errorMsg && !submission) {
     return (
-      <div className="review-workbench-page" data-testid="page-p-013" style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      <div
+        className="review-workbench-page"
+        data-testid="page-p-013"
+        style={{ maxWidth: "1100px", margin: "0 auto" }}
+      >
         <ErrorMessage
           title="Review Workbench Notice"
           message={errorMsg}
@@ -221,8 +260,12 @@ export default function ReviewWorkbench() {
           onRetry={loadData}
           className="mb-4"
         />
-        <div style={{ marginTop: '16px' }}>
-          <Link to="/reviewer" data-testid="EL-101" className="btn btn-secondary">
+        <div style={{ marginTop: "16px" }}>
+          <Link
+            to="/reviewer"
+            data-testid="EL-101"
+            className="btn btn-secondary"
+          >
             Return to Review Inbox
           </Link>
         </div>
@@ -233,41 +276,71 @@ export default function ReviewWorkbench() {
   if (!submission) return null;
 
   const isAssignedReviewer = submission.currentReviewerId === user?.id;
-  const isPendingReview = submission.status === 'submitted' || submission.status === 'in_review';
+  const isPendingReview =
+    submission.status === "submitted" || submission.status === "in_review";
   const canDecide = isAssignedReviewer && isPendingReview;
-  const stageName = workflow?.stages?.[submission.stageIndex]?.label || `Stage ${submission.stageIndex}`;
+  const stageName =
+    workflow?.stages?.[submission.stageIndex]?.label ||
+    `Stage ${submission.stageIndex + 1}`;
 
   return (
-    <div className="review-workbench-page" data-testid="page-p-013" style={{ maxWidth: '1100px', margin: '0 auto' }}>
+    <div
+      className="review-workbench-page"
+      data-testid="page-p-013"
+      style={{ maxWidth: "1100px", margin: "0 auto" }}
+    >
       {/* Top Header & Context */}
       <div
         className="card-header"
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px',
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "16px",
+          marginBottom: "20px",
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <Link to="/reviewer" data-testid="EL-101" className="btn btn-secondary btn-sm" aria-label="Return to review inbox">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "8px",
+            }}
+          >
+            <Link
+              to="/reviewer"
+              data-testid="EL-101"
+              className="btn btn-secondary btn-sm"
+              aria-label="Return to review inbox"
+            >
               Reviewer Inbox
             </Link>
-            <span className="badge badge-in_review">Stage {submission.stageIndex}: {stageName}</span>
+            <span className="badge badge-in_review">
+              Stage {submission.stageIndex + 1}: {stageName}
+            </span>
             <StatusBadge status={submission.status} />
           </div>
           <h1>Review Workbench</h1>
           <p className="card-subtitle">
-            Evaluating application for <strong>{submission.studentName || 'Student'}</strong> ({submission.studentEmail}) —{' '}
-            {submission.workflowTitle || 'Internship Application'}
+            Evaluating application for{" "}
+            <strong>{submission.studentName || "Student"}</strong> (
+            {submission.studentEmail}) —{" "}
+            {submission.workflowTitle || "Internship Application"}
           </p>
         </div>
 
         {/* Header Action Tools (EL-096, EL-097, EL-103) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             type="button"
             data-testid="EL-103"
@@ -292,13 +365,18 @@ export default function ReviewWorkbench() {
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            {refreshing ? 'Refreshing...' : '↻ Refresh State'}
+            {refreshing ? "Refreshing..." : "↻ Refresh State"}
           </button>
         </div>
       </div>
 
       {toastMessage && (
-        <div className="alert alert-success" role="status" aria-live="polite" style={{ marginBottom: '20px' }}>
+        <div
+          className="alert alert-success"
+          role="status"
+          aria-live="polite"
+          style={{ marginBottom: "20px" }}
+        >
           <span>✓ {toastMessage}</span>
         </div>
       )}
@@ -313,16 +391,23 @@ export default function ReviewWorkbench() {
       )}
 
       {!canDecide && (
-        <div className="alert alert-warning" style={{ marginBottom: '20px' }}>
+        <div className="alert alert-warning" style={{ marginBottom: "20px" }}>
           <strong>Evaluation Status: </strong>
           {!isAssignedReviewer ? (
             <span>
-              You are viewing this submission in read-only mode. The active evaluator for Stage {submission.stageIndex} is{' '}
-              <strong>{submission.currentReviewerName || 'another designated reviewer'}</strong>.
+              You are viewing this submission in read-only mode. The active
+              evaluator for Stage {submission.stageIndex + 1} is{" "}
+              <strong>
+                {submission.currentReviewerName ||
+                  "another designated reviewer"}
+              </strong>
+              .
             </span>
           ) : (
             <span>
-              This submission is currently in status <strong>{submission.status}</strong>. Decisions cannot be recorded until it is resubmitted.
+              This submission is currently in status{" "}
+              <strong>{submission.status}</strong>. Decisions cannot be recorded
+              until it is resubmitted.
             </span>
           )}
         </div>
@@ -331,92 +416,173 @@ export default function ReviewWorkbench() {
       {/* Main Grid: 2 Columns */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
-          gap: '24px',
-          alignItems: 'start',
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
+          gap: "24px",
+          alignItems: "start",
         }}
       >
         {/* Left Column: Application Details & Answers & Attachments */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* Section: Dynamic Field Responses */}
           <section className="card">
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
+            <h2
+              style={{
+                fontSize: "18px",
+                fontWeight: 700,
+                marginBottom: "16px",
+              }}
+            >
               Applicant Responses
             </h2>
-            {(workflow?.fields || workflow?.schema?.fields) && (workflow.fields || workflow.schema?.fields || []).length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {(workflow.fields || workflow.schema?.fields || []).map((field) => {
-                  const val = submission.answers['key' in field ? field.key : field.id];
-                  return (
-                    <div
-                      key={'key' in field ? field.key : field.id}
-                      style={{
-                        padding: '12px 16px',
-                        backgroundColor: 'var(--bg-subtle)',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border-light)',
-                      }}
-                    >
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)', marginBottom: '4px' }}>
-                        {field.label} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}
+            {(workflow?.fields || workflow?.schema?.fields) &&
+            (workflow.fields || workflow.schema?.fields || []).length > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                }}
+              >
+                {(workflow.fields || workflow.schema?.fields || []).map(
+                  (field) => {
+                    const val =
+                      submission.answers["key" in field ? field.key : field.id];
+                    return (
+                      <div
+                        key={"key" in field ? field.key : field.id}
+                        style={{
+                          padding: "12px 16px",
+                          backgroundColor: "var(--bg-subtle)",
+                          borderRadius: "var(--radius-md)",
+                          border: "1px solid var(--border-light)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            color: "var(--ink-muted)",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          {field.label}{" "}
+                          {field.required && (
+                            <span style={{ color: "var(--danger)" }}>*</span>
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "15px",
+                            color: "var(--ink-primary)",
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {val !== undefined &&
+                          val !== null &&
+                          String(val).trim() !== "" ? (
+                            field.type === "file" ? (
+                              submission.attachments?.find(
+                                (attachment) => attachment.id === val,
+                              )?.displayName || "Attached document"
+                            ) : (
+                              String(val)
+                            )
+                          ) : (
+                            <em style={{ color: "var(--ink-muted)" }}>
+                              Not provided
+                            </em>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '15px', color: 'var(--ink-primary)', whiteSpace: 'pre-wrap' }}>
-                        {val !== undefined && val !== null && String(val).trim() !== ''
-                          ? field.type === 'file' ? (submission.attachments?.find(attachment => attachment.id === val)?.displayName || 'Attached document') : String(val)
-                          : <em style={{ color: 'var(--ink-muted)' }}>Not provided</em>}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  },
+                )}
               </div>
             ) : Object.keys(submission.answers || {}).length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
                 {Object.entries(submission.answers).map(([key, value]) => (
                   <div
                     key={key}
                     style={{
-                      padding: '12px 16px',
-                      backgroundColor: 'var(--bg-subtle)',
-                      borderRadius: 'var(--radius-md)',
+                      padding: "12px 16px",
+                      backgroundColor: "var(--bg-subtle)",
+                      borderRadius: "var(--radius-md)",
                     }}
                   >
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)', marginBottom: '4px' }}>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "var(--ink-muted)",
+                        marginBottom: "4px",
+                      }}
+                    >
                       {key}
                     </div>
-                    <div style={{ fontSize: '14px', color: 'var(--ink-primary)' }}>{String(value)}</div>
+                    <div
+                      style={{ fontSize: "14px", color: "var(--ink-primary)" }}
+                    >
+                      {String(value)}
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p style={{ color: 'var(--ink-muted)' }}>No dynamic field answers provided.</p>
+              <p style={{ color: "var(--ink-muted)" }}>
+                No dynamic field answers provided.
+              </p>
             )}
           </section>
 
           {/* Section: Uploaded Evidence Attachments (EL-095) */}
           <section className="card">
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
+            <h2
+              style={{
+                fontSize: "18px",
+                fontWeight: 700,
+                marginBottom: "16px",
+              }}
+            >
               Uploaded Verification Evidence
             </h2>
             {submission.attachments && submission.attachments.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
                 {submission.attachments.map((att) => (
                   <div
                     key={att.id}
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '12px 16px',
-                      border: '1px solid var(--border-light)',
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'var(--bg-subtle)',
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "12px 16px",
+                      border: "1px solid var(--border-light)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "var(--bg-subtle)",
                     }}
                   >
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>📄 {att.displayName}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-                        {(att.bytes / 1024).toFixed(1)} KiB • {att.mime} • Status: {att.status}
+                      <div style={{ fontWeight: 600, fontSize: "14px" }}>
+                        📄 {att.displayName}
+                      </div>
+                      <div
+                        style={{ fontSize: "12px", color: "var(--ink-muted)" }}
+                      >
+                        {(att.bytes / 1024).toFixed(1)} KiB • {att.mime} •
+                        Status: {att.status}
                       </div>
                     </div>
                     <button
@@ -426,13 +592,19 @@ export default function ReviewWorkbench() {
                       onClick={() => handleDownloadAttachment(att.id)}
                       aria-label={`Read attached evidence ${att.displayName}`}
                     >
-                      Inspect / Stream ↗
+                      Open document
                     </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ padding: '16px', textAlign: 'center', color: 'var(--ink-muted)' }}>
+              <div
+                style={{
+                  padding: "16px",
+                  textAlign: "center",
+                  color: "var(--ink-muted)",
+                }}
+              >
                 No documents uploaded for this application.
               </div>
             )}
@@ -440,19 +612,39 @@ export default function ReviewWorkbench() {
         </div>
 
         {/* Right Column: Decision Panel & History */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* Decision Action Panel (EL-098, EL-099) */}
-          <section className="card" style={{ borderLeft: '4px solid var(--primary)' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>
-              Evaluation & Decision Desk
+          <section
+            className="card"
+            style={{ borderLeft: "4px solid var(--primary)" }}
+          >
+            <h2
+              style={{ fontSize: "18px", fontWeight: 700, marginBottom: "8px" }}
+            >
+              Your decision
             </h2>
-            <p style={{ fontSize: '13px', color: 'var(--ink-muted)', marginBottom: '16px' }}>
-              Record your official review for Stage {submission.stageIndex}. Decisions are immutably logged to the institutional audit ledger.
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--ink-muted)",
+                marginBottom: "16px",
+              }}
+            >
+              Record your official review for Stage {submission.stageIndex + 1}.
+              Your decision is saved in the application history.
             </p>
 
-            <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label htmlFor="decision-feedback-textarea" className="form-label">
-                Reviewer Evaluation Notes / Reason {canDecide && <span style={{ color: 'var(--ink-muted)' }}>(Min 10 chars for revisions or rejection)</span>}
+            <div className="form-group" style={{ marginBottom: "16px" }}>
+              <label
+                htmlFor="decision-feedback-textarea"
+                className="form-label"
+              >
+                Feedback for the student{" "}
+                {canDecide && (
+                  <span style={{ color: "var(--ink-muted)" }}>
+                    (Min 10 chars for revisions or rejection)
+                  </span>
+                )}
               </label>
               <textarea
                 id="decision-feedback-textarea"
@@ -463,36 +655,63 @@ export default function ReviewWorkbench() {
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
                 disabled={!canDecide}
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--ink-muted)', marginTop: '4px' }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "12px",
+                  color: "var(--ink-muted)",
+                  marginTop: "4px",
+                }}
+              >
                 <span>Length: {feedback.trim().length} characters</span>
                 {feedback.trim().length < 10 && (
-                  <span style={{ color: 'var(--warning)' }}>Requires &gt;= 10 chars for revisions/reject</span>
+                  <span style={{ color: "var(--warning)" }}>
+                    Requires &gt;= 10 chars for revisions/reject
+                  </span>
                 )}
               </div>
             </div>
 
             {canDecide ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
                 <button
                   type="button"
                   ref={confirmTriggerRef}
                   data-testid="EL-099"
                   className="btn btn-primary"
-                  onClick={() => handleOpenDecisionDialog('approve')}
-                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => handleOpenDecisionDialog("approve")}
+                  style={{ width: "100%", justifyContent: "center" }}
                 >
-                  ✓ Approve Stage {submission.stageIndex}
+                  ✓ Approve Stage {submission.stageIndex + 1}
                 </button>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '10px' }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+                    gap: "10px",
+                  }}
+                >
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => handleOpenDecisionDialog('needs_changes')}
+                    onClick={() => handleOpenDecisionDialog("needs_changes")}
                     disabled={feedback.trim().length < 10}
-                    style={{ justifyContent: 'center', borderColor: 'var(--warning)', color: 'var(--warning)' }}
+                    style={{
+                      justifyContent: "center",
+                      borderColor: "var(--warning)",
+                      color: "var(--warning)",
+                    }}
                   >
                     ⚠ Request Changes
                   </button>
@@ -500,16 +719,27 @@ export default function ReviewWorkbench() {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => handleOpenDecisionDialog('reject')}
+                    onClick={() => handleOpenDecisionDialog("reject")}
                     disabled={feedback.trim().length < 10}
-                    style={{ justifyContent: 'center', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                    style={{
+                      justifyContent: "center",
+                      borderColor: "var(--danger)",
+                      color: "var(--danger)",
+                    }}
                   >
                     ✕ Reject Application
                   </button>
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize: '13px', color: 'var(--ink-muted)', textAlign: 'center', padding: '12px' }}>
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "var(--ink-muted)",
+                  textAlign: "center",
+                  padding: "12px",
+                }}
+              >
                 Decision actions are disabled for this stage or viewer.
               </div>
             )}
@@ -517,8 +747,15 @@ export default function ReviewWorkbench() {
 
           {/* Decision Timeline / History (EL-102) */}
           <section className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 700 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "12px",
+              }}
+            >
+              <h2 style={{ fontSize: "18px", fontWeight: 700 }}>
                 Decision History
               </h2>
               <button
@@ -527,43 +764,75 @@ export default function ReviewWorkbench() {
                 className="btn btn-secondary btn-sm"
                 onClick={() => setShowHistory(!showHistory)}
               >
-                {showHistory ? 'Hide History' : 'Inspect Timeline'}
+                {showHistory ? "Hide History" : "Inspect Timeline"}
               </button>
             </div>
 
             {showHistory && (
-              <div style={{ marginTop: '12px' }}>
+              <div style={{ marginTop: "12px" }}>
                 {submission.history && submission.history.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "12px",
+                    }}
+                  >
                     {submission.history.map((record, idx) => (
                       <div
                         key={idx}
                         style={{
-                          padding: '12px',
+                          padding: "12px",
                           borderLeft: `3px solid ${
-                            record.action === 'approve'
-                              ? 'var(--success)'
-                              : record.action === 'needs_changes'
-                              ? 'var(--warning)'
-                              : 'var(--danger)'
+                            record.action === "approve"
+                              ? "var(--success)"
+                              : record.action === "needs_changes"
+                                ? "var(--warning)"
+                                : "var(--danger)"
                           }`,
-                          backgroundColor: 'var(--bg-subtle)',
-                          borderRadius: 'var(--radius-sm)',
+                          backgroundColor: "var(--bg-subtle)",
+                          borderRadius: "var(--radius-sm)",
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <span style={{ fontWeight: 600, fontSize: '13px' }}>
-                            Stage {record.stageIndex} — {record.action.toUpperCase()}
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: "4px",
+                          }}
+                        >
+                          <span style={{ fontWeight: 600, fontSize: "13px" }}>
+                            Stage {record.stageIndex + 1} —{" "}
+                            {record.action.toUpperCase()}
                           </span>
-                          <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "var(--ink-muted)",
+                            }}
+                          >
                             {new Date(record.decidedAt).toLocaleString()}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
-                          Reviewer: {record.reviewerName || record.reviewerId.slice(0, 8)}
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "var(--ink-secondary)",
+                          }}
+                        >
+                          Reviewer:{" "}
+                          {record.reviewerName || record.reviewerId.slice(0, 8)}
                         </div>
                         {record.reason && (
-                          <div style={{ marginTop: '6px', fontSize: '13px', fontStyle: 'italic', color: 'var(--ink-primary)' }}>
+                          <div
+                            style={{
+                              marginTop: "6px",
+                              fontSize: "13px",
+                              fontStyle: "italic",
+                              color: "var(--ink-primary)",
+                            }}
+                          >
                             &ldquo;{record.reason}&rdquo;
                           </div>
                         )}
@@ -571,8 +840,9 @@ export default function ReviewWorkbench() {
                     ))}
                   </div>
                 ) : (
-                  <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>
-                    No decisions recorded yet. This application is awaiting initial stage review.
+                  <p style={{ fontSize: "13px", color: "var(--ink-muted)" }}>
+                    No decisions recorded yet. This application is awaiting
+                    initial stage review.
                   </p>
                 )}
               </div>
@@ -586,34 +856,55 @@ export default function ReviewWorkbench() {
         isOpen={showDecisionConfirmModal}
         onClose={() => setShowDecisionConfirmModal(false)}
         title={
-          decisionType === 'approve'
-            ? `Confirm Approval — Stage ${submission.stageIndex}`
-            : decisionType === 'needs_changes'
-            ? 'Confirm Request for Changes'
-            : 'Confirm Final Rejection'
+          decisionType === "approve"
+            ? `Confirm Approval — Stage ${submission.stageIndex + 1}`
+            : decisionType === "needs_changes"
+              ? "Confirm Request for Changes"
+              : "Confirm Final Rejection"
         }
         description={
-          decisionType === 'approve'
-            ? `Are you sure you want to approve Stage ${submission.stageIndex} for submission ${submission.id.slice(0, 8)}...?`
-            : decisionType === 'needs_changes'
-            ? 'The student will be asked to revise their answers and resubmit. Your feedback will be visible to them.'
-            : 'This will irreversibly terminate the application. The student will be notified of this final decision.'
+          decisionType === "approve"
+            ? `Are you sure you want to approve Stage ${submission.stageIndex + 1} for submission ${submission.id.slice(0, 8)}...?`
+            : decisionType === "needs_changes"
+              ? "The student will be asked to revise their answers and resubmit. Your feedback will be visible to them."
+              : "This will irreversibly terminate the application. The student will be notified of this final decision."
         }
       >
-        <div style={{ margin: '16px 0', padding: '12px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)' }}>
-          <div style={{ fontSize: '13px', marginBottom: '6px' }}>
+        <div
+          style={{
+            margin: "16px 0",
+            padding: "12px",
+            backgroundColor: "var(--bg-subtle)",
+            borderRadius: "var(--radius-sm)",
+          }}
+        >
+          <div style={{ fontSize: "13px", marginBottom: "6px" }}>
             <strong>Target Submission:</strong> <code>{submission.id}</code>
           </div>
-          <div style={{ fontSize: '13px', marginBottom: '6px' }}>
-            <strong>Applicant:</strong> {submission.studentName || 'Student'} ({submission.studentEmail})
+          <div style={{ fontSize: "13px", marginBottom: "6px" }}>
+            <strong>Applicant:</strong> {submission.studentName || "Student"} (
+            {submission.studentEmail})
           </div>
-          <div style={{ fontSize: '13px' }}>
-            <strong>Feedback / Reason:</strong>{' '}
-            {feedback.trim() ? feedback.trim() : <em style={{ color: 'var(--ink-muted)' }}>None provided (approval)</em>}
+          <div style={{ fontSize: "13px" }}>
+            <strong>Feedback / Reason:</strong>{" "}
+            {feedback.trim() ? (
+              feedback.trim()
+            ) : (
+              <em style={{ color: "var(--ink-muted)" }}>
+                None provided (approval)
+              </em>
+            )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "12px",
+            marginTop: "20px",
+          }}
+        >
           <button
             type="button"
             data-testid="EL-100"
@@ -624,7 +915,7 @@ export default function ReviewWorkbench() {
             Cancel Decision
           </button>
 
-          {decisionType === 'approve' && (
+          {decisionType === "approve" && (
             <button
               type="button"
               data-testid="EL-104"
@@ -632,33 +923,41 @@ export default function ReviewWorkbench() {
               onClick={handleSubmitDecision}
               disabled={submittingDecision}
             >
-              {submittingDecision ? 'Submitting...' : 'Approve Current Stage'}
+              {submittingDecision ? "Submitting..." : "Approve Current Stage"}
             </button>
           )}
 
-          {decisionType === 'needs_changes' && (
+          {decisionType === "needs_changes" && (
             <button
               type="button"
               data-testid="EL-105"
               className="btn btn-primary"
               onClick={handleSubmitDecision}
               disabled={submittingDecision || feedback.trim().length < 10}
-              style={{ backgroundColor: 'var(--warning)', borderColor: 'var(--warning)' }}
+              style={{
+                backgroundColor: "var(--warning)",
+                borderColor: "var(--warning)",
+              }}
             >
-              {submittingDecision ? 'Submitting...' : 'Request Corrections'}
+              {submittingDecision ? "Submitting..." : "Request Corrections"}
             </button>
           )}
 
-          {decisionType === 'reject' && (
+          {decisionType === "reject" && (
             <button
               type="button"
               data-testid="EL-106"
               className="btn btn-primary"
               onClick={handleSubmitDecision}
               disabled={submittingDecision || feedback.trim().length < 10}
-              style={{ backgroundColor: 'var(--danger)', borderColor: 'var(--danger)' }}
+              style={{
+                backgroundColor: "var(--danger)",
+                borderColor: "var(--danger)",
+              }}
             >
-              {submittingDecision ? 'Submitting...' : 'Reject Application Finally'}
+              {submittingDecision
+                ? "Submitting..."
+                : "Reject Application Finally"}
             </button>
           )}
         </div>
@@ -668,42 +967,68 @@ export default function ReviewWorkbench() {
       <Dialog
         isOpen={showRequirementsModal}
         onClose={() => setShowRequirementsModal(false)}
-        title={workflow?.title || 'Workflow Requirements'}
+        title={workflow?.title || "Workflow Requirements"}
         description="Official published requirements and stages for this institutional process."
       >
-        <div style={{ margin: '16px 0', maxHeight: '400px', overflowY: 'auto' }}>
-          <p style={{ fontSize: '14px', marginBottom: '16px' }}>
-            {workflow?.description || 'No detailed instructions provided.'}
+        <div
+          style={{ margin: "16px 0", maxHeight: "400px", overflowY: "auto" }}
+        >
+          <p style={{ fontSize: "14px", marginBottom: "16px" }}>
+            {workflow?.description || "No detailed instructions provided."}
           </p>
 
-          <h3 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>Review Stages</h3>
+          <h3
+            style={{ fontSize: "14px", fontWeight: 700, marginBottom: "8px" }}
+          >
+            Review Stages
+          </h3>
           {workflow?.stages && workflow.stages.length > 0 ? (
-            <ol style={{ paddingLeft: '20px', fontSize: '13px' }}>
+            <ol style={{ paddingLeft: "20px", fontSize: "13px" }}>
               {workflow.stages.map((stg, i) => (
-                <li key={i} style={{ marginBottom: '6px' }}>
-                  <strong>{stg.label}</strong> — Assigned Evaluator: {stg.reviewerName || stg.reviewerId}
+                <li key={i} style={{ marginBottom: "6px" }}>
+                  <strong>{stg.label}</strong> — Assigned Evaluator:{" "}
+                  {stg.reviewerName || stg.reviewerId}
                 </li>
               ))}
             </ol>
           ) : (
-            <p style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>Single stage evaluation.</p>
+            <p style={{ fontSize: "13px", color: "var(--ink-muted)" }}>
+              Single stage evaluation.
+            </p>
           )}
 
-          <h3 style={{ fontSize: '14px', fontWeight: 700, marginTop: '16px', marginBottom: '8px' }}>
+          <h3
+            style={{
+              fontSize: "14px",
+              fontWeight: 700,
+              marginTop: "16px",
+              marginBottom: "8px",
+            }}
+          >
             Form Fields Required
           </h3>
           {(workflow?.fields || workflow?.schema?.fields) && (
-            <ul style={{ paddingLeft: '20px', fontSize: '13px' }}>
+            <ul style={{ paddingLeft: "20px", fontSize: "13px" }}>
               {(workflow.fields || workflow.schema?.fields || []).map((fld) => (
-                <li key={'key' in fld ? fld.key : fld.id} style={{ marginBottom: '4px' }}>
-                  <strong>{fld.label}</strong> ({fld.type}) {fld.required && '— Required'}
+                <li
+                  key={"key" in fld ? fld.key : fld.id}
+                  style={{ marginBottom: "4px" }}
+                >
+                  <strong>{fld.label}</strong> ({fld.type}){" "}
+                  {fld.required && "— Required"}
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: "16px",
+          }}
+        >
           <button
             type="button"
             className="btn btn-secondary"

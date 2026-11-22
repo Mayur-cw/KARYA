@@ -1,24 +1,37 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from './AuthContext';
-import { BrandMark, Icon, type IconName } from './Icon';
+import React, { useState, useRef, useEffect } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "./AuthContext";
+import { CommandMenu } from "./CommandMenu";
+import { BrandMark, Icon, type IconName } from "./Icon";
 
-const navigation: Record<string, { to: string; label: string; icon: IconName; end?: boolean }[]> = {
+const navigation: Record<
+  string,
+  { to: string; label: string; icon: IconName; end?: boolean }[]
+> = {
   admin: [
-    { to: '/admin', label: 'Overview', icon: 'grid', end: true },
-    { to: '/admin/workflows', label: 'Workflows', icon: 'layers' },
-    { to: '/admin/studio', label: 'Intake studio', icon: 'sparkle' },
-    { to: '/admin/audit', label: 'Audit trail', icon: 'log' },
+    { to: "/admin", label: "Overview", icon: "grid", end: true },
+    { to: "/admin/workflows", label: "Workflows", icon: "layers" },
+    { to: "/admin/studio", label: "Intake studio", icon: "sparkle" },
+    { to: "/admin/audit", label: "Audit trail", icon: "log" },
   ],
-  student: [{ to: '/student', label: 'My processes', icon: 'grid' }],
-  reviewer: [{ to: '/reviewer', label: 'Review inbox', icon: 'inbox' }],
+  student: [{ to: "/student", label: "My processes", icon: "grid" }],
+  reviewer: [{ to: "/reviewer", label: "Review inbox", icon: "inbox" }],
 };
 
 export function Header() {
-  const { user, role, unreadCount, logout, loading, presentationMode } = useAuth();
+  const {
+    user,
+    role,
+    unreadCount,
+    logout,
+    loading,
+    presentationMode,
+    demoMode,
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
+  const [searchOpen, setSearchOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [topbarMenuOpen, setTopbarMenuOpen] = useState(false);
@@ -26,9 +39,33 @@ export function Header() {
   const topbarMenuRef = useRef<HTMLDivElement>(null);
   const sidebarMenuRef = useRef<HTMLDivElement>(null);
 
-  const current = navigation[role]?.find(item => item.end ? location.pathname === item.to : location.pathname.startsWith(item.to));
-  const pageName = location.pathname === '/account' ? 'My account' : location.pathname === '/notifications' ? 'Notifications' : current?.label || 'Workspace';
-  const initials = user?.name.replace(/\([^)]*\)/g, '').replace(/^(Dr\.|Prof\.|Dean)\s*/, '').trim().split(/\s+/).slice(0, 2).map(n => n[0]).join('') || 'U';
+  const current = navigation[role]?.find((item) =>
+    item.end
+      ? location.pathname === item.to
+      : location.pathname.startsWith(item.to),
+  );
+  const pageName = location.pathname.endsWith("/edit")
+    ? "Workflow editor"
+    : location.pathname.endsWith("/monitor")
+      ? "Process monitor"
+      : location.pathname.includes("/submissions/")
+        ? role === "reviewer"
+          ? "Review application"
+          : "Application details"
+        : location.pathname === "/account"
+          ? "My account"
+          : location.pathname === "/notifications"
+            ? "Notifications"
+            : current?.label || "Workspace";
+  const initials =
+    user?.name
+      .replace(/\([^)]*\)/g, "")
+      .replace(/^(Dr\.|Prof\.|Dean)\s*/, "")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("") || "U";
 
   useEffect(() => {
     if (!topbarMenuOpen && !sidebarMenuOpen) return;
@@ -44,19 +81,34 @@ export function Header() {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setTopbarMenuOpen(false);
         setSidebarMenuOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [topbarMenuOpen, sidebarMenuOpen]);
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k" &&
+        user
+      ) {
+        event.preventDefault();
+        setSearchOpen((value) => !value);
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [user]);
 
   const handleSignOut = async () => {
     setTopbarMenuOpen(false);
@@ -65,53 +117,89 @@ export function Header() {
     setLogoutError(null);
     try {
       await logout();
-      navigate('/login', { replace: true });
+      navigate("/login", { replace: true });
     } catch (err) {
-      setLogoutError(err instanceof Error ? err.message : 'Unable to sign out. Please try again.');
+      setLogoutError(
+        err instanceof Error
+          ? err.message
+          : "Unable to sign out. Please try again.",
+      );
     } finally {
       setSigningOut(false);
     }
   };
 
   if (!user) {
-    const isPublicLanding = location.pathname === '/';
+    const isPublicLanding = location.pathname === "/";
     return (
       <header className="public-header">
-        <Link to="/" className="brand-logo" aria-label="KARYA Institutional workspace home">
+        <Link
+          to="/"
+          className="brand-logo"
+          aria-label="KARYA Institutional workspace home"
+        >
           <BrandMark />
-          <span>KARYA<span className="brand-caption">Institutional workspace</span></span>
+          <span>
+            KARYA<span className="brand-caption">Institutional workspace</span>
+          </span>
         </Link>
         <div className="public-header-actions">
           <span>Less paperwork. More progress.</span>
           {isPublicLanding && (
-            <Link to="/login" className="btn btn-primary btn-sm">Sign in</Link>
+            <Link to="/login" className="btn btn-primary btn-sm">
+              Sign in
+            </Link>
           )}
         </div>
       </header>
     );
   }
 
-  const roleTitle = role === 'admin' ? 'Administrator' : role === 'student' ? 'Student' : 'Reviewer';
-  const cleanName = user.name.replace(/\s*\([^)]*\)/g, '');
+  const roleTitle =
+    role === "admin"
+      ? "Administrator"
+      : role === "student"
+        ? "Student"
+        : "Reviewer";
+  const cleanName = user.name.replace(/\s*\([^)]*\)/g, "");
 
   return (
     <>
       <aside className="workspace-sidebar" aria-label="Workspace sidebar">
-        <Link to={`/${role}`} className="brand-logo" aria-label="KARYA Institutional workspace home">
+        <Link
+          to={`/${role}`}
+          className="brand-logo"
+          aria-label="KARYA Institutional workspace home"
+        >
           <BrandMark />
-          <span>KARYA<span className="brand-caption">Institutional workspace</span></span>
+          <span>
+            KARYA<span className="brand-caption">Institutional workspace</span>
+          </span>
         </Link>
         <div className="workspace-label">
-          <span className="workspace-monogram"><Icon name="shield" size={18} /></span>
+          <span className="workspace-monogram">
+            <Icon name="shield" size={18} />
+          </span>
           <span>
-            {role === 'admin' ? 'Administration' : role === 'student' ? 'Student workspace' : 'Faculty workspace'}
-            <small>KARYA · Operations</small>
+            {role === "admin"
+              ? "Administration"
+              : role === "student"
+                ? "Student workspace"
+                : "Faculty workspace"}
+            <small>Institutional workspace</small>
           </span>
         </div>
         <nav aria-label="Role Navigation" className="sidebar-nav">
           <p className="nav-caption">WORKSPACE</p>
-          {navigation[role]?.map(item => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
+          {navigation[role]?.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `sidebar-link${isActive ? " active" : ""}`
+              }
+            >
               <Icon name={item.icon} />
               <span>{item.label}</span>
             </NavLink>
@@ -120,7 +208,9 @@ export function Header() {
           <NavLink to="/notifications" className="sidebar-link">
             <Icon name="bell" />
             <span>Notifications</span>
-            {unreadCount > 0 && <span className="nav-count">{unreadCount}</span>}
+            {unreadCount > 0 && (
+              <span className="nav-count">{unreadCount}</span>
+            )}
           </NavLink>
           <NavLink to="/account" className="sidebar-link">
             <Icon name="user" />
@@ -161,12 +251,26 @@ export function Header() {
               </button>
             </div>
             {sidebarMenuOpen && (
-              <div className="sidebar-profile-menu" role="menu" aria-label="Sidebar account actions">
-                <Link to="/account" className="profile-dropdown-link" role="menuitem" onClick={() => setSidebarMenuOpen(false)}>
+              <div
+                className="sidebar-profile-menu"
+                role="menu"
+                aria-label="Sidebar account actions"
+              >
+                <Link
+                  to="/account"
+                  className="profile-dropdown-link"
+                  role="menuitem"
+                  onClick={() => setSidebarMenuOpen(false)}
+                >
                   <Icon name="user" size={16} />
                   <span>My Account</span>
                 </Link>
-                <Link to="/login" className="profile-dropdown-link" role="menuitem" onClick={() => setSidebarMenuOpen(false)}>
+                <Link
+                  to="/login"
+                  className="profile-dropdown-link"
+                  role="menuitem"
+                  onClick={() => setSidebarMenuOpen(false)}
+                >
                   <Icon name="sparkle" size={16} />
                   <span>Switch Demo Role</span>
                 </Link>
@@ -186,17 +290,48 @@ export function Header() {
       </aside>
       <header className="workspace-topbar">
         <div className="breadcrumb">
-          <span className="breadcrumb-root">Workspace</span><span className="breadcrumb-divider">/</span> <strong>{pageName}</strong>
+          <span className="breadcrumb-root">Workspace</span>
+          <span className="breadcrumb-divider">/</span>{" "}
+          <strong>{pageName}</strong>
         </div>
         <div className="topbar-actions">
+          <button
+            type="button"
+            className="workspace-search-trigger"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search workflows and shortcuts"
+          >
+            <Icon name="search" size={17} />
+            <span>Search workspace</span>
+            <kbd>⌘ K</kbd>
+          </button>
           <span className="today-label">
-            {new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}
+            {new Intl.DateTimeFormat("en-IN", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            }).format(new Date())}
           </span>
-          <Link to="/notifications" className="icon-button" aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}>
+          <Link
+            to="/notifications"
+            className="icon-button"
+            aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
+          >
             <Icon name="bell" />
-            {unreadCount > 0 && <span className="notification-count">{unreadCount}</span>}
+            {unreadCount > 0 && (
+              <span className="notification-count">{unreadCount}</span>
+            )}
           </Link>
-          <button type="button" className="btn btn-secondary btn-sm global-signout" onClick={handleSignOut} disabled={signingOut || loading} aria-busy={signingOut}><Icon name="exit" size={16} /><span>{signingOut ? 'Signing out…' : 'Sign out'}</span></button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm global-signout"
+            onClick={handleSignOut}
+            disabled={signingOut || loading}
+            aria-busy={signingOut}
+          >
+            <Icon name="exit" size={16} />
+            <span>{signingOut ? "Signing out…" : "Sign out"}</span>
+          </button>
           <div className="profile-menu-container" ref={topbarMenuRef}>
             <button
               type="button"
@@ -210,13 +345,21 @@ export function Header() {
               {initials}
             </button>
             {topbarMenuOpen && (
-              <div className="profile-dropdown" role="menu" aria-label="Account actions">
+              <div
+                className="profile-dropdown"
+                role="menu"
+                aria-label="Account actions"
+              >
                 <div className="profile-dropdown-identity">
                   <div className="avatar avatar-dropdown">{initials}</div>
                   <div className="profile-dropdown-user">
-                    <strong className="profile-dropdown-name">{cleanName}</strong>
+                    <strong className="profile-dropdown-name">
+                      {cleanName}
+                    </strong>
                     <span className="profile-dropdown-email">{user.email}</span>
-                    <span className="profile-dropdown-role-badge">{roleTitle}</span>
+                    <span className="profile-dropdown-role-badge">
+                      {roleTitle}
+                    </span>
                   </div>
                 </div>
                 <div className="profile-dropdown-divider" />
@@ -238,7 +381,9 @@ export function Header() {
                   >
                     <Icon name="bell" size={16} />
                     <span>Notifications</span>
-                    {unreadCount > 0 && <span className="nav-count">{unreadCount}</span>}
+                    {unreadCount > 0 && (
+                      <span className="nav-count">{unreadCount}</span>
+                    )}
                   </Link>
                   <Link
                     to="/login"
@@ -268,8 +413,45 @@ export function Header() {
           </div>
         </div>
       </header>
-      {logoutError && <div className="global-signout-error" role="alert">{logoutError} Your session is still active. Please retry Sign out.</div>}
-      {presentationMode && <div className="presentation-ribbon"><Icon name="sparkle" size={14} />Presentation demo · Sample workflows and people</div>}
+      {logoutError && (
+        <div className="global-signout-error" role="alert">
+          {logoutError} Your session is still active. Please retry Sign out.
+        </div>
+      )}
+      {presentationMode && (
+        <div className="presentation-ribbon">
+          <Icon name="sparkle" size={14} />
+          <span>
+            Presentation demo{" "}
+            <span className="ribbon-detail">· Fictional sample data</span>
+          </span>
+          {demoMode && <Link to="/login">Switch account</Link>}
+        </div>
+      )}
+      <nav
+        className="mobile-bottom-nav"
+        aria-label="Mobile workspace navigation"
+      >
+        <NavLink to={`/${role}`} end>
+          <Icon name={role === "reviewer" ? "inbox" : "grid"} />
+          <span>{role === "reviewer" ? "Review inbox" : "Overview"}</span>
+        </NavLink>
+        {role === "admin" && (
+          <NavLink to="/admin/workflows">
+            <Icon name="layers" />
+            <span>Workflows</span>
+          </NavLink>
+        )}
+        <NavLink to="/notifications">
+          <Icon name="bell" />
+          <span>Updates{unreadCount > 0 ? ` (${unreadCount})` : ""}</span>
+        </NavLink>
+        <NavLink to="/account">
+          <Icon name="user" />
+          <span>Account</span>
+        </NavLink>
+      </nav>
+      <CommandMenu open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 }

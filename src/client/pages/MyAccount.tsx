@@ -102,7 +102,7 @@ export default function MyAccount() {
           </div>
           <h1>My Account</h1>
           <p className="card-subtitle">
-            Inspect verified institutional credentials, update display name, and manage active session state.
+            Manage your profile, check your current role, and control your session.
           </p>
         </div>
 

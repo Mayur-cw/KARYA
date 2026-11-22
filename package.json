@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "concurrently \"DEMO_MODE=true DEMO_SEED=true tsx watch src/server/index.ts\" \"vite --host 0.0.0.0\"",
-    "build": "tsc -p tsconfig.server.json && node scripts/copy-migrations.mjs && vite build",
+    "build": "tsc -p tsconfig.server.json && node scripts/copy-migrations.mjs && node scripts/build-client.mjs",
     "start": "node dist-server/server/index.js",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
@@ -17,7 +17,7 @@
     "test:a11y": "vitest run tests/a11y",
     "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build && bash scripts/check-repo.sh",
     "audit": "npm audit --audit-level=high",
-    "build:client": "vite build",
+    "build:client": "node scripts/build-client.mjs",
     "test:security": "vitest run tests/integration/security-hardening.test.ts",
     "test:presentation": "vitest run tests/integration/presentation-seed.test.ts"
   },

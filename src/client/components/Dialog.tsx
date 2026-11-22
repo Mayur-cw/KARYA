@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useId } from 'react';
+import React, { useEffect, useRef, useId } from "react";
 
 interface DialogProps {
   isOpen: boolean;
@@ -15,7 +15,7 @@ export function Dialog({
   title,
   description,
   children,
-  maxWidth = '560px',
+  maxWidth = "560px",
 }: DialogProps) {
   const id = useId();
   const closeRef = useRef(onClose);
@@ -28,24 +28,27 @@ export function Dialog({
       previousFocusRef.current = document.activeElement as HTMLElement;
 
       const previousOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
       // Trap focus
-      const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
+      const focusableElements =
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
       if (focusableElements && focusableElements.length > 0) {
-        focusableElements[0].focus();
+        const preferred =
+          dialogRef.current?.querySelector<HTMLElement>("[data-autofocus]");
+        (preferred || focusableElements[0]).focus();
       }
 
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
+        if (e.key === "Escape") {
           closeRef.current();
-        } else if (e.key === 'Tab') {
+        } else if (e.key === "Tab") {
           if (!dialogRef.current) return;
           const focusables = Array.from(
             dialogRef.current.querySelectorAll<HTMLElement>(
-              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            )
+              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
           );
           if (focusables.length === 0) return;
 
@@ -66,9 +69,9 @@ export function Dialog({
         }
       };
 
-      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener("keydown", handleKeyDown);
       return () => {
-        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener("keydown", handleKeyDown);
         document.body.style.overflow = previousOverflow;
         if (previousFocusRef.current) {
           previousFocusRef.current.focus();
@@ -81,7 +84,13 @@ export function Dialog({
 
   return (
     <div className="modal-backdrop">
-      <button type="button" className="modal-dismiss" tabIndex={-1} aria-label="Dismiss dialog" onClick={onClose} />
+      <button
+        type="button"
+        className="modal-dismiss"
+        tabIndex={-1}
+        aria-label="Dismiss dialog"
+        onClick={onClose}
+      />
       <div
         ref={dialogRef}
         role="dialog"
@@ -93,20 +102,27 @@ export function Dialog({
       >
         <div
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            marginBottom: '16px',
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "16px",
           }}
         >
           <div>
-            <h2 id={`${id}-title`} style={{ fontSize: '20px', fontWeight: 700 }}>
+            <h2
+              id={`${id}-title`}
+              style={{ fontSize: "20px", fontWeight: 700 }}
+            >
               {title}
             </h2>
             {description && (
               <p
                 id={`${id}-description`}
-                style={{ fontSize: '14px', color: 'var(--ink-muted)', marginTop: '4px' }}
+                style={{
+                  fontSize: "14px",
+                  color: "var(--ink-muted)",
+                  marginTop: "4px",
+                }}
               >
                 {description}
               </p>
@@ -117,7 +133,7 @@ export function Dialog({
             onClick={onClose}
             aria-label="Close dialog"
             className="btn btn-secondary btn-sm"
-            style={{ minHeight: '32px', padding: '0 8px', lineHeight: 1 }}
+            style={{ minHeight: "32px", padding: "0 8px", lineHeight: 1 }}
           >
             ✕
           </button>

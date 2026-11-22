@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { StatusBadge } from '../components/StatusBadge';
-import { LoadingSkeleton } from '../components/LoadingSkeleton';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { Dialog } from '../components/Dialog';
-import { api } from '../api';
+import React, { useState, useEffect, useCallback } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { StatusBadge } from "../components/StatusBadge";
+import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { Dialog } from "../components/Dialog";
+import { api } from "../api";
 
 interface DynamicField {
   id: string;
@@ -25,7 +25,7 @@ interface WorkflowDetail {
   departmentId: string;
   title: string;
   description: string;
-  status: 'draft' | 'proposed' | 'published' | 'archived';
+  status: "draft" | "proposed" | "published" | "archived";
   version: number;
   origin: string;
   deadline?: string;
@@ -55,7 +55,7 @@ export default function WorkflowOverview() {
   const [metrics, setMetrics] = useState<WorkflowMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const [archiveReason, setArchiveReason] = useState('');
+  const [archiveReason, setArchiveReason] = useState("");
   const [archiving, setArchiving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -74,13 +74,36 @@ export default function WorkflowOverview() {
 
       const [wf, m] = await Promise.all([
         api<WorkflowDetail>(`/api/workflows/${workflowId}`),
-        api<import('../../shared/contracts').WorkflowAnalytics>(`/api/workflows/${workflowId}/analytics`).catch(() => null),
+        api<import("../../shared/contracts").WorkflowAnalytics>(
+          `/api/workflows/${workflowId}/analytics`,
+        ).catch(() => null),
       ]);
 
       setWorkflow(wf);
-      setMetrics(m ? { ...m, totalSubmissions: m.draft + m.submitted + m.inReview + m.needsChanges + m.approved + m.rejected, stage0Pending: m.stageBreakdown.find(stage => stage.stageIndex === 0)?.pendingCount || 0, stage1Pending: m.stageBreakdown.find(stage => stage.stageIndex === 1)?.pendingCount || 0 } : null);
+      setMetrics(
+        m
+          ? {
+              ...m,
+              totalSubmissions:
+                m.draft +
+                m.submitted +
+                m.inReview +
+                m.needsChanges +
+                m.approved +
+                m.rejected,
+              stage0Pending:
+                m.stageBreakdown.find((stage) => stage.stageIndex === 0)
+                  ?.pendingCount || 0,
+              stage1Pending:
+                m.stageBreakdown.find((stage) => stage.stageIndex === 1)
+                  ?.pendingCount || 0,
+            }
+          : null,
+      );
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load workflow details');
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to load workflow details",
+      );
     } finally {
       setLoading(false);
     }
@@ -98,16 +121,20 @@ export default function WorkflowOverview() {
   // EL-047 View original source
   const handleViewSource = async () => {
     if (!workflow?.sourceId) {
-      showToast('No external source document associated with this workflow');
+      showToast("No external source document associated with this workflow");
       return;
     }
     setSourceLoading(true);
     setSourceModalOpen(true);
     try {
-      const doc = await api<{ extractedText: string }>(`/api/documents/${workflow.sourceId}`);
+      const doc = await api<{ extractedText: string }>(
+        `/api/documents/${workflow.sourceId}`,
+      );
       setSourceText(doc.extractedText);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to retrieve source text');
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to retrieve source text",
+      );
     } finally {
       setSourceLoading(false);
     }
@@ -119,22 +146,22 @@ export default function WorkflowOverview() {
     setDownloading(true);
     try {
       const res = await fetch(`/api/workflows/${workflowId}/report.csv`, {
-        credentials: 'same-origin',
+        credentials: "same-origin",
       });
-      if (!res.ok) throw new Error('CSV download request failed');
+      if (!res.ok) throw new Error("CSV download request failed");
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `karya_workflow_${workflowId.slice(0, 8)}_report.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      showToast('Completion report downloaded successfully');
+      showToast("Completion report downloaded successfully");
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'CSV export failed');
+      setErrorMsg(err instanceof Error ? err.message : "CSV export failed");
     } finally {
       setDownloading(false);
     }
@@ -148,14 +175,17 @@ export default function WorkflowOverview() {
     setErrorMsg(null);
     try {
       await api(`/api/workflows/${workflowId}/archive`, {
-        method: 'POST',
-        body: JSON.stringify({ expectedVersion: workflow.version, reason: archiveReason.trim() }),
+        method: "POST",
+        body: JSON.stringify({
+          expectedVersion: workflow.version,
+          reason: archiveReason.trim(),
+        }),
       });
       setArchiveOpen(false);
-      showToast('Workflow has been archived');
+      showToast("Workflow has been archived");
       await loadWorkflow();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Archive action failed');
+      setErrorMsg(err instanceof Error ? err.message : "Archive action failed");
     } finally {
       setArchiving(false);
     }
@@ -163,8 +193,11 @@ export default function WorkflowOverview() {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 0' }}>
-        <LoadingSkeleton label="Loading workflow details and participation telemetry..." lines={6} />
+      <div style={{ maxWidth: "960px", margin: "0 auto", padding: "32px 0" }}>
+        <LoadingSkeleton
+          label="Loading workflow details and participation telemetry..."
+          lines={6}
+        />
       </div>
     );
   }
@@ -180,20 +213,33 @@ export default function WorkflowOverview() {
     );
   }
 
-  const isPublished = workflow.status === 'published';
-  const isArchived = workflow.status === 'archived';
+  const isPublished = workflow.status === "published";
+  const isArchived = workflow.status === "archived";
 
   return (
-    <div className="workflow-overview-page" data-testid="page-p-007" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <div
+      className="workflow-overview-page"
+      data-testid="page-p-007"
+      style={{ maxWidth: "1000px", margin: "0 auto" }}
+    >
       {/* Return link (EL-050) */}
-      <div style={{ marginBottom: '16px' }}>
-        <Link to="/admin/workflows" data-testid="EL-050" className="btn btn-secondary btn-sm">
+      <div style={{ marginBottom: "16px" }}>
+        <Link
+          to="/admin/workflows"
+          data-testid="EL-050"
+          className="btn btn-secondary btn-sm"
+        >
           Return to Workflow Registry
         </Link>
       </div>
 
       {toastMessage && (
-        <div className="alert alert-success" role="status" aria-live="polite" style={{ marginBottom: '20px' }}>
+        <div
+          className="alert alert-success"
+          role="status"
+          aria-live="polite"
+          style={{ marginBottom: "20px" }}
+        >
           <span>✓ {toastMessage}</span>
         </div>
       )}
@@ -209,30 +255,49 @@ export default function WorkflowOverview() {
       )}
 
       {/* Top Header Card */}
-      <div className="card" style={{ marginBottom: '24px' }}>
+      <div className="card" style={{ marginBottom: "24px" }}>
         <div
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
-            gap: '16px',
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            gap: "16px",
           }}
         >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginBottom: "8px",
+              }}
+            >
               <span className="badge badge-published">Workflow Detail</span>
               <StatusBadge status={workflow.status} />
-              <span style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>v{workflow.version}</span>
+              <span style={{ fontSize: "13px", color: "var(--ink-muted)" }}>
+                v{workflow.version}
+              </span>
             </div>
             <h1>{workflow.title}</h1>
-            <p className="card-subtitle" style={{ maxWidth: '640px', marginTop: '6px' }}>
-              {workflow.description || 'No description provided.'}
+            <p
+              className="card-subtitle"
+              style={{ maxWidth: "640px", marginTop: "6px" }}
+            >
+              {workflow.description || "No description provided."}
             </p>
           </div>
 
           {/* Action Strip (EL-045, EL-046, EL-048, EL-049) */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              alignItems: "center",
+            }}
+          >
             <button
               type="button"
               data-testid="EL-045"
@@ -271,7 +336,7 @@ export default function WorkflowOverview() {
               onClick={handleExportCsv}
               disabled={downloading}
             >
-              {downloading ? 'Exporting...' : '📥 Export CSV'}
+              {downloading ? "Exporting..." : "📥 Export CSV"}
             </button>
 
             {!isArchived && (
@@ -282,7 +347,7 @@ export default function WorkflowOverview() {
                 onClick={() => setArchiveOpen(true)}
                 disabled={archiving}
               >
-                {archiving ? 'Archiving...' : 'Archive'}
+                {archiving ? "Archiving..." : "Archive"}
               </button>
             )}
           </div>
@@ -290,77 +355,164 @@ export default function WorkflowOverview() {
       </div>
 
       {/* Participation Telemetry Cards (Derived from EP-034) */}
-      <section style={{ marginBottom: '28px' }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '14px' }}>Participation Telemetry</h2>
+      <section style={{ marginBottom: "28px" }}>
+        <h2 style={{ fontSize: "18px", marginBottom: "14px" }}>
+          Participation Telemetry
+        </h2>
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
-            gap: '16px',
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(min(100%, 180px), 1fr))",
+            gap: "16px",
           }}
         >
           <div className="card">
-            <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 600 }}>TOTAL ASSIGNED</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '4px' }}>
-              {metrics ? metrics.totalAssigned : '-'}
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--ink-muted)",
+                fontWeight: 600,
+              }}
+            >
+              TOTAL ASSIGNED
+            </span>
+            <div
+              style={{ fontSize: "28px", fontWeight: 800, marginTop: "4px" }}
+            >
+              {metrics ? metrics.totalAssigned : "-"}
             </div>
           </div>
 
           <div className="card">
-            <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600 }}>SUBMITTED</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--primary)', marginTop: '4px' }}>
-              {metrics ? metrics.totalSubmissions : '-'}
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--primary)",
+                fontWeight: 600,
+              }}
+            >
+              SUBMITTED
+            </span>
+            <div
+              style={{
+                fontSize: "28px",
+                fontWeight: 800,
+                color: "var(--primary)",
+                marginTop: "4px",
+              }}
+            >
+              {metrics ? metrics.totalSubmissions : "-"}
             </div>
           </div>
 
           <div className="card">
-            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>IN REVIEW</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--warning)', marginTop: '4px' }}>
-              {metrics ? metrics.inReview : '-'}
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--warning)",
+                fontWeight: 600,
+              }}
+            >
+              IN REVIEW
+            </span>
+            <div
+              style={{
+                fontSize: "28px",
+                fontWeight: 800,
+                color: "var(--warning)",
+                marginTop: "4px",
+              }}
+            >
+              {metrics ? metrics.inReview : "-"}
             </div>
           </div>
 
           <div className="card">
-            <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 600 }}>APPROVED</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--success)', marginTop: '4px' }}>
-              {metrics ? metrics.approved : '-'}
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--success)",
+                fontWeight: 600,
+              }}
+            >
+              APPROVED
+            </span>
+            <div
+              style={{
+                fontSize: "28px",
+                fontWeight: 800,
+                color: "var(--success)",
+                marginTop: "4px",
+              }}
+            >
+              {metrics ? metrics.approved : "-"}
             </div>
           </div>
 
           <div className="card">
-            <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>REJECTED</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--danger)', marginTop: '4px' }}>
-              {metrics ? metrics.rejected : '-'}
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--danger)",
+                fontWeight: 600,
+              }}
+            >
+              REJECTED
+            </span>
+            <div
+              style={{
+                fontSize: "28px",
+                fontWeight: 800,
+                color: "var(--danger)",
+                marginTop: "4px",
+              }}
+            >
+              {metrics ? metrics.rejected : "-"}
             </div>
           </div>
         </div>
       </section>
 
       {/* Process Structure Overview */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '20px' }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+          gap: "20px",
+        }}
+      >
         {/* Stages and Reviewers */}
         <div className="card">
-          <h2 style={{ fontSize: '16px', marginBottom: '12px' }}>Review Pipeline</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h2 style={{ fontSize: "16px", marginBottom: "12px" }}>
+            Review Pipeline
+          </h2>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+          >
             {workflow.stages?.map((s) => (
               <div
                 key={s.stageIndex}
                 style={{
-                  padding: '10px 14px',
-                  borderRadius: 'var(--radius-sm)',
-                  backgroundColor: 'var(--bg-subtle)',
-                  border: '1px solid var(--border-light)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "var(--bg-subtle)",
+                  border: "1px solid var(--border-light)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: '13px' }}>
-                    Stage {s.stageIndex}: {s.label}
+                  <div style={{ fontWeight: 600, fontSize: "13px" }}>
+                    Stage {s.stageIndex + 1}: {s.label}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-                    Reviewer ID: {s.reviewerId ? s.reviewerId.substring(0, 8) + '...' : 'Unassigned'}
+                  <div style={{ fontSize: "12px", color: "var(--ink-muted)" }}>
+                    Reviewer ID:{" "}
+                    {s.reviewerId
+                      ? s.reviewerId.substring(0, 8) + "..."
+                      : "Unassigned"}
                   </div>
                 </div>
                 <span className="badge badge-draft">Sequential</span>
@@ -371,25 +523,33 @@ export default function WorkflowOverview() {
 
         {/* Dynamic Fields Schema */}
         <div className="card">
-          <h2 style={{ fontSize: '16px', marginBottom: '12px' }}>Applicant Schema ({workflow.fields?.length || 0} fields)</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <h2 style={{ fontSize: "16px", marginBottom: "12px" }}>
+            Applicant Schema ({workflow.fields?.length || 0} fields)
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {workflow.fields?.map((f) => (
               <div
                 key={f.key}
                 style={{
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-light)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '13px',
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--border-light)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "13px",
                 }}
               >
                 <span>
-                  <strong>{f.label}</strong> {f.required && <span style={{ color: 'var(--danger)' }}>*</span>}
+                  <strong>{f.label}</strong>{" "}
+                  {f.required && (
+                    <span style={{ color: "var(--danger)" }}>*</span>
+                  )}
                 </span>
-                <span className="badge badge-draft" style={{ fontSize: '11px' }}>
+                <span
+                  className="badge badge-draft"
+                  style={{ fontSize: "11px" }}
+                >
                   {f.type}
                 </span>
               </div>
@@ -407,26 +567,35 @@ export default function WorkflowOverview() {
         maxWidth="720px"
       >
         {sourceLoading ? (
-          <LoadingSkeleton label="Retrieving encrypted source document..." lines={6} />
+          <LoadingSkeleton
+            label="Retrieving encrypted source document..."
+            lines={6}
+          />
         ) : (
           <div>
             <div
               style={{
-                maxHeight: '360px',
-                overflowY: 'auto',
-                padding: '16px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: 'var(--bg-subtle)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '13px',
+                maxHeight: "360px",
+                overflowY: "auto",
+                padding: "16px",
+                borderRadius: "var(--radius-md)",
+                backgroundColor: "var(--bg-subtle)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "13px",
                 lineHeight: 1.6,
-                whiteSpace: 'pre-wrap',
-                border: '1px solid var(--border-light)',
+                whiteSpace: "pre-wrap",
+                border: "1px solid var(--border-light)",
               }}
             >
-              {sourceText || 'No text extracted.'}
+              {sourceText || "No text extracted."}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: "16px",
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
@@ -438,9 +607,46 @@ export default function WorkflowOverview() {
           </div>
         )}
       </Dialog>
-      <Dialog isOpen={archiveOpen} onClose={() => { if (!archiving) setArchiveOpen(false); }} title="Archive this workflow?" description="Archiving stops new applications and makes the workflow read-only. Existing records remain available.">
-        <div className="form-group"><label className="form-label" htmlFor="archive-reason">Reason for archiving</label><textarea id="archive-reason" className="form-textarea" maxLength={500} value={archiveReason} onChange={event => setArchiveReason(event.target.value)} placeholder="Explain why this process is being closed." disabled={archiving} /></div>
-        <div className="heading-actions"><button type="button" className="btn btn-secondary" onClick={() => setArchiveOpen(false)} disabled={archiving}>Cancel</button><button type="button" className="btn btn-danger" onClick={handleArchive} disabled={archiving || !archiveReason.trim()}>{archiving ? 'Archiving…' : 'Confirm archive'}</button></div>
+      <Dialog
+        isOpen={archiveOpen}
+        onClose={() => {
+          if (!archiving) setArchiveOpen(false);
+        }}
+        title="Archive this workflow?"
+        description="Archiving stops new applications and makes the workflow read-only. Existing records remain available."
+      >
+        <div className="form-group">
+          <label className="form-label" htmlFor="archive-reason">
+            Reason for archiving
+          </label>
+          <textarea
+            id="archive-reason"
+            className="form-textarea"
+            maxLength={500}
+            value={archiveReason}
+            onChange={(event) => setArchiveReason(event.target.value)}
+            placeholder="Explain why this process is being closed."
+            disabled={archiving}
+          />
+        </div>
+        <div className="heading-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setArchiveOpen(false)}
+            disabled={archiving}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={handleArchive}
+            disabled={archiving || !archiveReason.trim()}
+          >
+            {archiving ? "Archiving…" : "Confirm archive"}
+          </button>
+        </div>
       </Dialog>
     </div>
   );

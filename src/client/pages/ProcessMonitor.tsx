@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { StatusBadge } from '../components/StatusBadge';
-import { LoadingSkeleton } from '../components/LoadingSkeleton';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { EmptyState } from '../components/EmptyState';
-import { Dialog } from '../components/Dialog';
-import { api } from '../api';
-import { fetchCollection } from '../collections';
-import type { AssignmentPublic, SubmissionPublic, WorkflowAnalytics } from '../../shared/contracts';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { StatusBadge } from "../components/StatusBadge";
+import { LoadingSkeleton } from "../components/LoadingSkeleton";
+import { ErrorMessage } from "../components/ErrorMessage";
+import { EmptyState } from "../components/EmptyState";
+import { Dialog } from "../components/Dialog";
+import { api } from "../api";
+import { fetchCollection } from "../collections";
+import type {
+  AssignmentPublic,
+  SubmissionPublic,
+  WorkflowAnalytics,
+} from "../../shared/contracts";
 
 interface ParticipantRecord {
   assignmentId: string;
@@ -16,7 +20,14 @@ interface ParticipantRecord {
   studentEmail: string;
   assignedAt: string;
   submissionId: string | null;
-  submissionStatus: 'unstarted' | 'draft' | 'submitted' | 'in_review' | 'needs_changes' | 'approved' | 'rejected';
+  submissionStatus:
+    | "unstarted"
+    | "draft"
+    | "submitted"
+    | "in_review"
+    | "needs_changes"
+    | "approved"
+    | "rejected";
   submittedAt?: string | null;
   currentStageIndex?: number;
 }
@@ -46,7 +57,7 @@ export default function ProcessMonitor() {
   const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
   const [metrics, setMetrics] = useState<WorkflowMetrics | null>(null);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
-  const [workflowTitle, setWorkflowTitle] = useState('Workflow Process');
+  const [workflowTitle, setWorkflowTitle] = useState("Workflow Process");
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,12 +66,12 @@ export default function ProcessMonitor() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Search & Filter state (EL-051, EL-053)
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // Add Recipient Dialog (EL-057)
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [selectedNewStudentId, setSelectedNewStudentId] = useState('');
+  const [selectedNewStudentId, setSelectedNewStudentId] = useState("");
   const [adding, setAdding] = useState(false);
 
   const showToast = (msg: string) => {
@@ -73,22 +84,54 @@ export default function ProcessMonitor() {
     try {
       setErrorMsg(null);
 
-      const [wf, assignments, analytics, users, submissions] = await Promise.all([
-        api<{ title: string }>(`/api/workflows/${workflowId}`),
-        fetchCollection<AssignmentPublic>(`/api/assignments?workflowId=${workflowId}`),
-        api<WorkflowAnalytics>(`/api/workflows/${workflowId}/analytics`),
-        fetchCollection<UserOption>('/api/users'),
-        fetchCollection<SubmissionPublic>(`/api/submissions?workflowId=${workflowId}`),
-      ]);
+      const [wf, assignments, analytics, users, submissions] =
+        await Promise.all([
+          api<{ title: string }>(`/api/workflows/${workflowId}`),
+          fetchCollection<AssignmentPublic>(
+            `/api/assignments?workflowId=${workflowId}`,
+          ),
+          api<WorkflowAnalytics>(`/api/workflows/${workflowId}/analytics`),
+          fetchCollection<UserOption>("/api/users"),
+          fetchCollection<SubmissionPublic>(
+            `/api/submissions?workflowId=${workflowId}`,
+          ),
+        ]);
       setWorkflowTitle(wf.title);
-      setParticipants(assignments.filter(assignment => assignment.status !== 'revoked').map(assignment => {
-        const submission = submissions.find(item => item.studentId === assignment.studentId);
-        return { assignmentId: assignment.id, studentId: assignment.studentId, studentName: assignment.studentName || 'Student', studentEmail: assignment.studentEmail || '', assignedAt: assignment.assignedAt, submissionId: submission?.id || null, submissionStatus: submission?.status || 'unstarted', currentStageIndex: submission?.stageIndex };
-      }));
-      setMetrics({ ...analytics, totalSubmissions: submissions.length, stage0Pending: analytics.stageBreakdown.find(stage => stage.stageIndex === 0)?.pendingCount || 0, stage1Pending: analytics.stageBreakdown.find(stage => stage.stageIndex === 1)?.pendingCount || 0 });
+      const submissionByStudent = new Map(
+        submissions.map((submission) => [submission.studentId, submission]),
+      );
+      setParticipants(
+        assignments
+          .filter((assignment) => assignment.status !== "revoked")
+          .map((assignment) => {
+            const submission = submissionByStudent.get(assignment.studentId);
+            return {
+              assignmentId: assignment.id,
+              studentId: assignment.studentId,
+              studentName: assignment.studentName || "Student",
+              studentEmail: assignment.studentEmail || "",
+              assignedAt: assignment.assignedAt,
+              submissionId: submission?.id || null,
+              submissionStatus: submission?.status || "unstarted",
+              currentStageIndex: submission?.stageIndex,
+            };
+          }),
+      );
+      setMetrics({
+        ...analytics,
+        totalSubmissions: submissions.length,
+        stage0Pending:
+          analytics.stageBreakdown.find((stage) => stage.stageIndex === 0)
+            ?.pendingCount || 0,
+        stage1Pending:
+          analytics.stageBreakdown.find((stage) => stage.stageIndex === 1)
+            ?.pendingCount || 0,
+      });
       setAllUsers(users);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to load process telemetry');
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to load process telemetry",
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -103,7 +146,7 @@ export default function ProcessMonitor() {
   const handleRefreshAnalytics = async () => {
     setRefreshing(true);
     await loadMonitorData();
-    showToast('Telemetry refreshed from live records');
+    showToast("Telemetry refreshed from live records");
   };
 
   // EL-056 Export process CSV
@@ -112,40 +155,51 @@ export default function ProcessMonitor() {
     setDownloading(true);
     try {
       const res = await fetch(`/api/workflows/${workflowId}/report.csv`, {
-        credentials: 'same-origin',
+        credentials: "same-origin",
       });
-      if (!res.ok) throw new Error('CSV download request failed');
+      if (!res.ok) throw new Error("CSV download request failed");
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = `process_monitor_${workflowId.slice(0, 8)}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      showToast('Process monitor report downloaded');
+      showToast("Process monitor report downloaded");
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'CSV export failed');
+      setErrorMsg(err instanceof Error ? err.message : "CSV export failed");
     } finally {
       setDownloading(false);
     }
   };
 
   // EL-052 Revoke unstarted assignment
-  const handleRevokeAssignment = async (studentId: string, studentName: string) => {
+  const handleRevokeAssignment = async (
+    studentId: string,
+    studentName: string,
+  ) => {
     if (!workflowId) return;
-    if (!window.confirm(`Revoke workflow assignment for ${studentName}?`)) return;
+    if (!window.confirm(`Revoke workflow assignment for ${studentName}?`))
+      return;
 
     try {
-      await api(`/api/assignments/${participants.find(participant => participant.studentId === studentId)?.assignmentId}`, {
-        method: 'DELETE',
-      });
+      await api(
+        `/api/assignments/${participants.find((participant) => participant.studentId === studentId)?.assignmentId}`,
+        {
+          method: "DELETE",
+        },
+      );
       showToast(`Assignment revoked for ${studentName}`);
       await loadMonitorData();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to revoke assignment (already started)');
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "Failed to revoke assignment (already started)",
+      );
     }
   };
 
@@ -156,15 +210,17 @@ export default function ProcessMonitor() {
     setErrorMsg(null);
     try {
       await api(`/api/workflows/${workflowId}/assignments`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ studentIds: [selectedNewStudentId] }),
       });
-      showToast('Student recipient added successfully');
+      showToast("Student recipient added successfully");
       setAddModalOpen(false);
-      setSelectedNewStudentId('');
+      setSelectedNewStudentId("");
       await loadMonitorData();
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to assign recipient');
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to assign recipient",
+      );
     } finally {
       setAdding(false);
     }
@@ -179,7 +235,7 @@ export default function ProcessMonitor() {
         p.studentEmail.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesStatus =
-        statusFilter === 'all' || p.submissionStatus === statusFilter;
+        statusFilter === "all" || p.submissionStatus === statusFilter;
 
       return matchesQ && matchesStatus;
     });
@@ -188,13 +244,17 @@ export default function ProcessMonitor() {
   // Available students not yet assigned
   const assignedIds = new Set(participants.map((p) => p.studentId));
   const unassignedStudents = allUsers.filter(
-    (u) => u.role === 'student' && !assignedIds.has(u.id)
+    (u) => u.role === "student" && !assignedIds.has(u.id),
   );
 
   return (
-    <div className="process-monitor-page" data-testid="page-p-008" style={{ maxWidth: '1100px', margin: '0 auto' }}>
+    <div
+      className="process-monitor-page"
+      data-testid="page-p-008"
+      style={{ maxWidth: "1100px", margin: "0 auto" }}
+    >
       {/* EL-058 Back link */}
-      <div style={{ marginBottom: '16px' }}>
+      <div style={{ marginBottom: "16px" }}>
         <Link
           to={`/admin/workflows/${workflowId}`}
           data-testid="EL-058"
@@ -208,26 +268,43 @@ export default function ProcessMonitor() {
       <div
         className="card-header"
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '24px',
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "16px",
+          marginBottom: "24px",
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span className="badge badge-published">Live Process Telemetry</span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "8px",
+            }}
+          >
+            <span className="badge badge-published">
+              Live Process Telemetry
+            </span>
           </div>
           <h1>Process Monitor: {workflowTitle}</h1>
           <p className="card-subtitle">
-            Cohort submission statuses, review stages, and assignment revocations.
+            Cohort submission statuses, review stages, and assignment
+            revocations.
           </p>
         </div>
 
         {/* Global Monitor Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             type="button"
             data-testid="EL-057"
@@ -243,7 +320,7 @@ export default function ProcessMonitor() {
             onClick={handleRefreshAnalytics}
             disabled={refreshing}
           >
-            {refreshing ? 'Refreshing...' : '↻ Refresh Analytics'}
+            {refreshing ? "Refreshing..." : "↻ Refresh Analytics"}
           </button>
           <button
             type="button"
@@ -252,13 +329,18 @@ export default function ProcessMonitor() {
             onClick={handleExportCsv}
             disabled={downloading}
           >
-            {downloading ? 'Exporting...' : '📥 Export CSV'}
+            {downloading ? "Exporting..." : "📥 Export CSV"}
           </button>
         </div>
       </div>
 
       {toastMessage && (
-        <div className="alert alert-success" role="status" aria-live="polite" style={{ marginBottom: '20px' }}>
+        <div
+          className="alert alert-success"
+          role="status"
+          aria-live="polite"
+          style={{ marginBottom: "20px" }}
+        >
           <span>✓ {toastMessage}</span>
         </div>
       )}
@@ -274,46 +356,117 @@ export default function ProcessMonitor() {
       )}
 
       {/* Derived Metric Counters */}
-      <section style={{ marginBottom: '28px' }}>
+      <section style={{ marginBottom: "28px" }}>
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
-            gap: '14px',
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+            gap: "14px",
           }}
         >
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 600 }}>COHORT POOL</span>
-            <div style={{ fontSize: '26px', fontWeight: 800, marginTop: '2px' }}>
+          <div className="card" style={{ padding: "16px" }}>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--ink-muted)",
+                fontWeight: 600,
+              }}
+            >
+              COHORT POOL
+            </span>
+            <div
+              style={{ fontSize: "26px", fontWeight: 800, marginTop: "2px" }}
+            >
               {metrics ? metrics.totalAssigned : participants.length}
             </div>
           </div>
 
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600 }}>SUBMISSIONS</span>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--primary)', marginTop: '2px' }}>
-              {metrics ? metrics.totalSubmissions : '-'}
+          <div className="card" style={{ padding: "16px" }}>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--primary)",
+                fontWeight: 600,
+              }}
+            >
+              SUBMISSIONS
+            </span>
+            <div
+              style={{
+                fontSize: "26px",
+                fontWeight: 800,
+                color: "var(--primary)",
+                marginTop: "2px",
+              }}
+            >
+              {metrics ? metrics.totalSubmissions : "-"}
             </div>
           </div>
 
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>STAGE 0 (MENTOR)</span>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--warning)', marginTop: '2px' }}>
-              {metrics ? metrics.stage0Pending : '-'}
+          <div className="card" style={{ padding: "16px" }}>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--warning)",
+                fontWeight: 600,
+              }}
+            >
+              STAGE 0 (MENTOR)
+            </span>
+            <div
+              style={{
+                fontSize: "26px",
+                fontWeight: 800,
+                color: "var(--warning)",
+                marginTop: "2px",
+              }}
+            >
+              {metrics ? metrics.stage0Pending : "-"}
             </div>
           </div>
 
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>STAGE 1 (FINAL)</span>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--warning)', marginTop: '2px' }}>
-              {metrics ? metrics.stage1Pending : '-'}
+          <div className="card" style={{ padding: "16px" }}>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--warning)",
+                fontWeight: 600,
+              }}
+            >
+              STAGE 1 (FINAL)
+            </span>
+            <div
+              style={{
+                fontSize: "26px",
+                fontWeight: 800,
+                color: "var(--warning)",
+                marginTop: "2px",
+              }}
+            >
+              {metrics ? metrics.stage1Pending : "-"}
             </div>
           </div>
 
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 600 }}>APPROVED</span>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--success)', marginTop: '2px' }}>
-              {metrics ? metrics.approved : '-'}
+          <div className="card" style={{ padding: "16px" }}>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--success)",
+                fontWeight: 600,
+              }}
+            >
+              APPROVED
+            </span>
+            <div
+              style={{
+                fontSize: "26px",
+                fontWeight: 800,
+                color: "var(--success)",
+                marginTop: "2px",
+              }}
+            >
+              {metrics ? metrics.approved : "-"}
             </div>
           </div>
         </div>
@@ -323,17 +476,21 @@ export default function ProcessMonitor() {
       <div
         className="card"
         style={{
-          padding: '16px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '16px',
-          alignItems: 'center',
-          backgroundColor: 'var(--bg-subtle)',
+          padding: "16px 20px",
+          marginBottom: "20px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "16px",
+          alignItems: "center",
+          backgroundColor: "var(--bg-subtle)",
         }}
       >
-        <div style={{ flex: '1 1 260px' }}>
-          <label htmlFor="search-participants-input" className="form-label" style={{ fontSize: '13px' }}>
+        <div style={{ flex: "1 1 260px" }}>
+          <label
+            htmlFor="search-participants-input"
+            className="form-label"
+            style={{ fontSize: "13px" }}
+          >
             Search Participants
           </label>
           <input
@@ -344,12 +501,16 @@ export default function ProcessMonitor() {
             placeholder="Search by student name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ height: '40px', minHeight: '40px' }}
+            style={{ height: "40px", minHeight: "40px" }}
           />
         </div>
 
-        <div style={{ flex: '0 1 200px' }}>
-          <label htmlFor="filter-completion-status" className="form-label" style={{ fontSize: '13px' }}>
+        <div style={{ flex: "0 1 200px" }}>
+          <label
+            htmlFor="filter-completion-status"
+            className="form-label"
+            style={{ fontSize: "13px" }}
+          >
             Completion Status
           </label>
           <select
@@ -358,7 +519,7 @@ export default function ProcessMonitor() {
             className="form-select"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ height: '40px', minHeight: '40px' }}
+            style={{ height: "40px", minHeight: "40px" }}
           >
             <option value="all">All Cohort Statuses</option>
             <option value="unstarted">Unstarted</option>
@@ -379,66 +540,99 @@ export default function ProcessMonitor() {
         <EmptyState
           title="No participant records match"
           description={
-            searchQuery || statusFilter !== 'all'
-              ? 'Try clearing your search query or setting the status filter to all.'
-              : 'No students have been assigned to this workflow yet.'
+            searchQuery || statusFilter !== "all"
+              ? "Try clearing your search query or setting the status filter to all."
+              : "No students have been assigned to this workflow yet."
           }
-          actionLabel={searchQuery || statusFilter !== 'all' ? 'Clear Filters' : 'Add First Recipient'}
+          actionLabel={
+            searchQuery || statusFilter !== "all"
+              ? "Clear Filters"
+              : "Add First Recipient"
+          }
           onAction={() => {
-            if (searchQuery || statusFilter !== 'all') {
-              setSearchQuery('');
-              setStatusFilter('all');
+            if (searchQuery || statusFilter !== "all") {
+              setSearchQuery("");
+              setStatusFilter("all");
             } else {
               setAddModalOpen(true);
             }
           }}
         />
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" aria-label="Participant Submissions Table">
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              className="data-table"
+              aria-label="Participant Submissions Table"
+            >
               <thead>
                 <tr>
                   <th scope="col">Student Applicant</th>
                   <th scope="col">Status</th>
                   <th scope="col">Assigned Date</th>
                   <th scope="col">Submission Info</th>
-                  <th scope="col" style={{ textAlign: 'right' }}>Actions</th>
+                  <th scope="col" style={{ textAlign: "right" }}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredParticipants.map((p) => {
-                  const isUnstarted = p.submissionStatus === 'unstarted';
+                  const isUnstarted = p.submissionStatus === "unstarted";
                   return (
                     <tr key={p.studentId}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{p.studentName}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>{p.studentEmail}</div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "var(--ink-muted)",
+                          }}
+                        >
+                          {p.studentEmail}
+                        </div>
                       </td>
                       <td>
                         <StatusBadge status={p.submissionStatus} />
                       </td>
-                      <td style={{ fontSize: '13px' }}>
-                        {p.assignedAt ? new Date(p.assignedAt).toLocaleDateString() : '-'}
+                      <td style={{ fontSize: "13px" }}>
+                        {p.assignedAt
+                          ? new Date(p.assignedAt).toLocaleDateString()
+                          : "-"}
                       </td>
                       <td>
                         {p.submissionId ? (
-                          <div style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "var(--ink-secondary)",
+                            }}
+                          >
                             ID: {p.submissionId.slice(0, 8)}...
-                            {p.submittedAt && ` • Submitted ${new Date(p.submittedAt).toLocaleDateString()}`}
+                            {p.submittedAt &&
+                              ` • Submitted ${new Date(p.submittedAt).toLocaleDateString()}`}
                           </div>
                         ) : (
-                          <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>Not yet initiated</span>
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              color: "var(--ink-muted)",
+                            }}
+                          >
+                            Not yet initiated
+                          </span>
                         )}
                       </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px' }}>
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", gap: "6px" }}>
                           {p.submissionId ? (
                             <button
                               type="button"
                               data-testid="EL-055"
                               className="btn btn-secondary btn-sm"
-                              onClick={() => navigate(`/admin/submissions/${p.submissionId}`)}
+                              onClick={() =>
+                                navigate(`/admin/submissions/${p.submissionId}`)
+                              }
                             >
                               Inspect
                             </button>
@@ -447,9 +641,18 @@ export default function ProcessMonitor() {
                               type="button"
                               data-testid="EL-052"
                               className="btn btn-danger btn-sm"
-                              onClick={() => handleRevokeAssignment(p.studentId, p.studentName)}
+                              onClick={() =>
+                                handleRevokeAssignment(
+                                  p.studentId,
+                                  p.studentName,
+                                )
+                              }
                               disabled={!isUnstarted}
-                              title={isUnstarted ? 'Revoke unstarted assignment' : 'Cannot revoke assignment once started'}
+                              title={
+                                isUnstarted
+                                  ? "Revoke unstarted assignment"
+                                  : "Cannot revoke assignment once started"
+                              }
                             >
                               Revoke
                             </button>
@@ -472,10 +675,11 @@ export default function ProcessMonitor() {
         title="Add Recipient to Workflow Cohort"
         description="Select an unassigned student from the departmental roster"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {unassignedStudents.length === 0 ? (
-            <p style={{ fontSize: '14px', color: 'var(--ink-muted)' }}>
-              All eligible students in this department are already assigned to this workflow.
+            <p style={{ fontSize: "14px", color: "var(--ink-muted)" }}>
+              All eligible students in this department are already assigned to
+              this workflow.
             </p>
           ) : (
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -498,7 +702,9 @@ export default function ProcessMonitor() {
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}
+          >
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -512,7 +718,7 @@ export default function ProcessMonitor() {
               onClick={handleAddRecipient}
               disabled={!selectedNewStudentId || adding}
             >
-              {adding ? 'Assigning...' : 'Confirm Assignment'}
+              {adding ? "Assigning..." : "Confirm Assignment"}
             </button>
           </div>
         </div>
