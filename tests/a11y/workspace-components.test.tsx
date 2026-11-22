@@ -55,6 +55,23 @@ describe('Workspace sessions and navigation', () => {
     expect(screen.queryByRole('navigation', { name: 'Role Navigation' })).toBeNull();
     expect(setCsrfToken).toHaveBeenCalledWith(null);
   });
+  it('opens the profile menu when clicking avatar and signs out', async () => {
+    vi.mocked(api).mockImplementation(async path => path === '/api/notifications/unread-count' ? { count: 0 } : { user, csrfToken: 'token', demoMode: true, demoActors: [user] });
+    mount();
+    await waitFor(() => expect(screen.getByTestId('auth-state').textContent).toBe('admin:0:true'));
+
+    expect(screen.queryByTestId('profile-signout-btn')).toBeNull();
+    const avatarBtn = screen.getByTestId('profile-avatar-btn');
+    fireEvent.click(avatarBtn);
+
+    const signoutBtn = screen.getByTestId('profile-signout-btn');
+    expect(signoutBtn).toBeDefined();
+    expect(screen.getByText('My Account')).toBeDefined();
+
+    vi.mocked(api).mockResolvedValue({ user: null, csrfToken: '', demoMode: true, demoActors: [user] });
+    fireEvent.click(signoutBtn);
+    await waitFor(() => expect(screen.getByTestId('auth-state').textContent).toBe('anonymous:0:true'));
+  });
   it('reports an unavailable server and disables demo access', async () => {
     vi.mocked(api).mockRejectedValue(new Error('Offline'));
     mount();
