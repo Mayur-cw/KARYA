@@ -5,16 +5,195 @@ import { rateLimit } from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getConfig } from './config.js';
+import {
+  authenticate,
+  requireAuth,
+  requireRoles,
+  requireAnonymous,
+  checkStudentOwnership,
+  denyPrivateObject,
+} from './authz.js';
+import {
+  csrfProtection,
+  loginRateLimiter,
+  setSessionCookie,
+  clearSessionCookie,
+  parseCookies,
+  SESSION_COOKIE_NAME,
+} from './security.js';
+import {
+  findUserById,
+  createSession,
+  deleteSessionByToken,
+  SEEDED_USERS,
+} from './session.js';
+import { demoLoginRequestSchema } from '../shared/contracts.js';
+
 export function createApp() {
- const config=getConfig();const app=express();app.disable('x-powered-by');
- app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'"],imgSrc:["'self'",'data:'],connectSrc:["'self'"]}}}));
- app.use(cors({origin:(origin,cb)=>cb(null,!origin || config.ALLOWED_ORIGINS.split(',').map(x=>x.trim()).includes(origin))}));
- app.use(rateLimit({windowMs:15*60_000,limit:100,standardHeaders:'draft-8',legacyHeaders:false}));
- app.use(express.json({limit:'64kb'}));
- app.get('/healthz',(_req,res)=>res.status(200).json({status:'ok'}));
- // App endpoints and authentication are created from contracts by T-03 and entity tasks.
- const dirname=path.dirname(fileURLToPath(import.meta.url));const staticDir=path.resolve(dirname,'../../dist/client');
- app.use(express.static(staticDir,{maxAge:'1h'}));
- app.get(/^\/(?!api\/).*/,(_req,res)=>res.sendFile(path.join(staticDir,'index.html')));
- return app;
+  const config = getConfig();
+  const app = express();
+  app.disable('x-powered-by');
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'"],
+        },
+      },
+    })
+  );
+
+  app.use(
+    cors({
+      origin: (origin, cb) =>
+        cb(
+          null,
+          !origin ||
+            config.ALLOWED_ORIGINS.split(',')
+              .map((x) => x.trim())
+              .includes(origin)
+        ),
+      credentials: true,
+    })
+  );
+
+  app.use(
+    rateLimit({
+      windowMs: 15 * 60_000,
+      limit: 500,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+    })
+  );
+
+  app.use(express.json({ limit: '64kb' }));
+
+  // Health check endpoints (EP-040 + /healthz)
+  app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
+  app.get('/api/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
+
+  // Attach authentication context to all API routes
+  app.use('/api', authenticate);
+
+  // CSRF protection for mutating API requests
+  app.use('/api', csrfProtection);
+
+  // ==========================================
+  // Auth Endpoints (EP-001, EP-002, EP-003)
+  // ==========================================
+
+  // EP-001 POST /api/auth/demo-login
+  app.post('/api/auth/demo-login', requireAnonymous, loginRateLimiter, (req, res) => {
+    const parseRes = demoLoginRequestSchema.safeParse(req.body);
+    if (!parseRes.success) {
+      res.status(400).json({
+        code: 'INVALID_INPUT',
+        message: 'Missing or malformed userId',
+        details: parseRes.error.issues,
+      });
+      return;
+    }
+
+    const { userId } = parseRes.data;
+    const user = findUserById(userId);
+    if (!user) {
+      res.status(404).json({
+        code: 'NOT_FOUND',
+        message: `Demo user '${userId}' not found or not allowlisted`,
+      });
+      return;
+    }
+
+    const { sessionToken, csrfToken } = createSession(user);
+    setSessionCookie(res, sessionToken);
+
+    res.status(201).json({
+      user,
+      csrfToken,
+    });
+  });
+
+  // EP-002 GET /api/auth/me
+  app.get('/api/auth/me', requireAuth, (_req, res) => {
+    const user = res.locals.principal;
+    const csrfToken = res.locals.session?.csrfToken;
+    res.status(200).json({
+      user,
+      csrfToken,
+    });
+  });
+
+  // EP-003 POST /api/auth/logout
+  app.post('/api/auth/logout', requireAuth, (req, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    let sessionToken = cookies[SESSION_COOKIE_NAME];
+    if (!sessionToken && req.headers.authorization?.startsWith('Bearer ')) {
+      sessionToken = req.headers.authorization.slice(7).trim();
+    }
+    if (sessionToken) {
+      deleteSessionByToken(sessionToken);
+    }
+    clearSessionCookie(res);
+    res.status(201).json({});
+  });
+
+  // Demo identities list (for P-002 dropdown in DEMO_MODE)
+  app.get('/api/auth/demo-users', (_req, res) => {
+    res.status(200).json({
+      items: SEEDED_USERS,
+    });
+  });
+
+  // Route stub for admin-only endpoint test (EP-004 GET /api/users)
+  app.get('/api/users', requireRoles('admin'), (_req, res) => {
+    res.status(200).json({
+      items: SEEDED_USERS,
+      total: SEEDED_USERS.length,
+      page: 1,
+      limit: 20,
+    });
+  });
+
+  // Route stub for student-only submission creation (EP-023)
+  app.post('/api/workflows/:workflowId/submissions', requireRoles('student'), (req, res) => {
+    res.status(201).json({
+      id: 'sub-mock-123',
+      workflowId: req.params.workflowId,
+      studentId: res.locals.principal?.id,
+      status: 'draft',
+      version: 1,
+    });
+  });
+
+  // Route stub for reviewer-only decision (EP-029)
+  app.post('/api/submissions/:submissionId/decision', requireRoles('reviewer'), (_req, res) => {
+    res.status(200).json({
+      id: _req.params.submissionId,
+      status: 'approved',
+    });
+  });
+
+  // Route stub for testing student object isolation (IDOR guard)
+  app.get('/api/submissions/:submissionId/test-scope', requireAuth, (req, res) => {
+    const principal = res.locals.principal!;
+    const targetStudentId = req.query.ownerStudentId as string;
+    if (principal.role === 'student' && !checkStudentOwnership(principal, targetStudentId)) {
+      denyPrivateObject(res);
+      return;
+    }
+    res.status(200).json({ status: 'ok', ownerStudentId: targetStudentId });
+  });
+
+  // Static files and client SPA fallback
+  const dirname = path.dirname(fileURLToPath(import.meta.url));
+  const staticDir = path.resolve(dirname, '../../dist/client');
+  app.use(express.static(staticDir, { maxAge: '1h' }));
+  app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
+
+  return app;
 }
