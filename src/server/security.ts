@@ -1,11 +1,17 @@
+import crypto from 'node:crypto';
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
+
+export function timingSafeTokenMatch(a: string, b: string): boolean {
+  const left = Buffer.from(a); const right = Buffer.from(b);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
 
 export const SESSION_COOKIE_NAME = 'karya_session';
 
 export function parseCookies(header?: string): Record<string, string> {
   if (!header) return {};
-  const cookies: Record<string, string> = {};
+  const cookies: Record<string, string> = Object.create(null);
   const parts = header.split(';');
   for (const part of parts) {
     const idx = part.indexOf('=');
@@ -63,7 +69,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
   }
 
   const csrfHeader = req.headers['x-csrf-token'];
-  if (!csrfHeader || csrfHeader !== session.csrfToken) {
+  if (typeof csrfHeader !== 'string' || !timingSafeTokenMatch(csrfHeader, session.csrfToken)) {
     res.status(403).json({
       code: 'FORBIDDEN',
       message: 'Invalid or missing CSRF token',
@@ -85,10 +91,9 @@ export const loginRateLimiter: RequestHandler = isTest
   ? (_req, _res, next) => next()
   : rateLimit({
       windowMs: 60 * 1000,
-      limit: 120,
+      limit: isDev ? 120 : 10,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Too many login attempts. Please retry later.' },
     });
 
@@ -99,7 +104,6 @@ export const aiRateLimiter: RequestHandler = isTest
       limit: 5,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'AI proposal limit reached. Please wait a moment.' },
     });
 
@@ -110,7 +114,6 @@ export const uploadRateLimiter: RequestHandler = isTest
       limit: 20,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Upload rate limit reached.' },
     });
 
@@ -121,7 +124,6 @@ export const writeRateLimiter: RequestHandler = isTest
       limit: 60,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Write request limit reached.' },
     });
 
@@ -132,6 +134,5 @@ export const readRateLimiter: RequestHandler = isTest
       limit: 200,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      validate: { xForwardedForHeader: false },
       message: { code: 'RATE_LIMITED', message: 'Read request limit reached.' },
     });

@@ -64,6 +64,7 @@ interface AuthContextType {
   error: string | null;
   unreadCount: number;
   demoMode?: boolean;
+  presentationMode?: boolean;
   demoActors?: DemoActor[];
   login: (userId: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -74,6 +75,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [presentationMode, setPresentationMode] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [demoActors, setDemoActors] = useState<DemoActor[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -94,11 +96,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       setError(null);
-      const data = await api<{ user: UserProfile | null; csrfToken: string; demoMode: boolean; demoActors?: UserProfile[] }>('/api/session');
+      const data = await api<{ user: UserProfile | null; csrfToken: string; demoMode: boolean; presentationMode?: boolean; demoActors?: UserProfile[] }>('/api/session');
       if (data.csrfToken) {
         setCsrfToken(data.csrfToken);
       }
       setDemoMode(data.demoMode === true);
+      setPresentationMode(data.presentationMode === true);
       setDemoActors((data.demoActors || []).map(actor => ({ ...actor, name: actor.name.replace(/\s*\([^)]*\)/g, ''), title: SEEDED_ACTORS.find(seed => seed.id === actor.id)?.title || actor.role })));
       setCsrfToken(data.csrfToken || null);
       setUser(data.user);
@@ -110,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       setError('Unable to connect to KARYA. Check that the server is running.');
       setDemoMode(false);
+      setPresentationMode(false);
       setDemoActors([]);
       setCsrfToken(null);
       setUser(null);
@@ -179,6 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         error,
         unreadCount,
         demoMode,
+        presentationMode,
         demoActors,
         login,
         logout,

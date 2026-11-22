@@ -1,3 +1,4 @@
+import { submissionPage } from '../queries.js';
 import type { Request, Response } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -14,7 +15,6 @@ import {
   type Workflow,
   type SubmissionPublic,
   type AttachmentPublic,
-  type SubmissionPage,
   type DeletionReceipt,
 } from '../../shared/contracts.js';
 import { recordAudit } from '../events.js';
@@ -173,7 +173,7 @@ export function handlePostWorkflowSubmissions(req: Request, res: Response): void
     return;
   }
 
-  const initialAnswers = (parseResult.data.answers as Record<string, unknown>) || {};
+  const initialAnswers = parseResult.data.answers || {};
   const submission = subRepo.createDraft(workflowId, principal.id, assignment.id, initialAnswers);
 
   recordAudit(db, {
@@ -194,108 +194,7 @@ export function handlePostWorkflowSubmissions(req: Request, res: Response): void
 // EP-024: GET /api/submissions (Admin, Student, Reviewer)
 // ==========================================
 export function handleGetSubmissions(req: Request, res: Response): void {
-  const principal = res.locals.principal!;
-  const db = getDb();
-  const wfRepo = new WorkflowRepository(db);
-  const subRepo = new SubmissionRepository(db);
-
-  const workflowIdQuery = typeof req.query.workflowId === 'string' ? req.query.workflowId : undefined;
-  const statusQuery = typeof req.query.status === 'string' ? req.query.status : undefined;
-  const q = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : undefined;
-  const page = Math.max(1, parseInt(typeof req.query.page === 'string' ? req.query.page : '1', 10) || 1);
-  const limit = Math.min(50, Math.max(1, parseInt(typeof req.query.limit === 'string' ? req.query.limit : '20', 10) || 20));
-
-  let submissions: Submission[] = [];
-
-  if (principal.role === 'student') {
-    // Strictly scoped to own submissions
-    submissions = subRepo.listByStudent(principal.id);
-  } else if (principal.role === 'reviewer') {
-    // Reviewer: submissions where reviewer is assigned to active stage
-    const reviewerList = subRepo.listForReviewer(principal.id);
-    submissions = reviewerList.map((r) => r.submission);
-  } else if (principal.role === 'admin') {
-    // Admin: submissions within admin department
-    if (workflowIdQuery) {
-      const wf = wfRepo.getLatestVersion(workflowIdQuery);
-      if (!wf || wf.departmentId !== principal.departmentId) {
-        const emptyResponse: SubmissionPage = { items: [], total: 0, page, limit };
-        res.json(emptyResponse);
-        return;
-      }
-      submissions = subRepo.listByWorkflow(workflowIdQuery);
-    } else {
-      const stmt = db.prepare(`
-        SELECT s.* FROM submissions s
-        INNER JOIN workflows w ON s.workflowId = w.id
-        INNER JOIN (
-          SELECT id, MAX(version) as maxv FROM workflows GROUP BY id
-        ) m ON w.id = m.id AND w.version = m.maxv
-        WHERE w.departmentId = ?
-        ORDER BY s.updatedAt DESC
-      `);
-      const rows = stmt.all(principal.departmentId) as unknown as Array<{
-        id: string;
-        workflowId: string;
-        studentId: string;
-        assignmentId: string;
-        answers: string;
-        status: Submission['status'];
-        stageIndex: number;
-        revision: number;
-        version: number;
-        history: string;
-        createdAt: string;
-        updatedAt: string;
-      }>;
-      submissions = rows.map((r) => ({
-        id: r.id,
-        workflowId: r.workflowId,
-        studentId: r.studentId,
-        assignmentId: r.assignmentId,
-        answers: JSON.parse(r.answers || '{}'),
-        status: r.status,
-        stageIndex: r.stageIndex,
-        revision: r.revision,
-        version: r.version,
-        history: JSON.parse(r.history || '[]'),
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-      }));
-    }
-  }
-
-  // Filters
-  if (workflowIdQuery) {
-    submissions = submissions.filter((s) => s.workflowId === workflowIdQuery);
-  }
-  if (statusQuery) {
-    submissions = submissions.filter((s) => s.status === statusQuery);
-  }
-
-  // Enrich items and search q
-  let enriched = submissions.map((s) => enrichSubmission(db, s));
-  if (q) {
-    enriched = enriched.filter((s) => {
-      const sName = (s.studentName || '').toLowerCase();
-      const sEmail = (s.studentEmail || '').toLowerCase();
-      const wfTitle = (s.workflowTitle || '').toLowerCase();
-      return sName.includes(q) || sEmail.includes(q) || wfTitle.includes(q);
-    });
-  }
-
-  const total = enriched.length;
-  const startIndex = (page - 1) * limit;
-  const pagedItems = enriched.slice(startIndex, startIndex + limit);
-
-  const pageResponse: SubmissionPage = {
-    items: pagedItems,
-    total,
-    page,
-    limit,
-  };
-
-  res.json(pageResponse);
+  res.json(submissionPage(getDb(), res.locals.principal!, req.query));
 }
 
 // ==========================================
@@ -506,6 +405,14 @@ export function handleSubmitSubmission(req: Request, res: Response): void {
   }
 
   for (const field of wf.fields) {
+    const value = sub.answers?.[field.key];
+    if (value === undefined || value === null || value === '') continue;
+    if (field.type !== 'file' && typeof value !== 'string') validationErrors.push({ field: field.key, message: `Enter a valid value for "${field.label}".` });
+    if (field.type === 'select' && (!field.options || !field.options.includes(String(value)))) validationErrors.push({ field: field.key, message: `Select an available option for "${field.label}".` });
+    if (field.type === 'date') {
+      const date = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00Z`) : new Date(NaN);
+      if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) validationErrors.push({ field: field.key, message: `Choose a valid date for "${field.label}".` });
+    }
     if (field.type !== 'file') continue;
     const reference = sub.answers?.[field.key];
     if (!reference) continue;

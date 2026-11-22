@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: karya
+    runtime: docker
+    plan: free
+    autoDeployTrigger: off
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEMO_MODE
+        value: "true"
+      - key: DEMO_SEED
+        value: "true"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DEMO_ACCESS_PASSWORD
+        generateValue: true

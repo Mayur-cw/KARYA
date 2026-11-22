@@ -25,7 +25,7 @@ export type ResponseCode = keyof typeof responseCode;
 export const errorSchema = z.object({
   code: z.string(),
   message: z.string(),
-  details: z.any().optional(),
+  details: z.unknown().optional(),
 });
 export type AppError = z.infer<typeof errorSchema>;
 
@@ -374,7 +374,7 @@ export const submissionSchema = z.object({
   workflowId: z.string().uuid(),
   studentId: z.string().uuid(),
   assignmentId: z.string().uuid(),
-  answers: z.record(z.string(), z.any()),
+  answers: z.record(z.string().max(50), z.union([z.string().max(10000), z.number().finite(), z.boolean(), z.null()])),
   status: submissionStatusSchema,
   stageIndex: z.number().int().nonnegative(),
   revision: z.number().int().positive(),
@@ -386,13 +386,13 @@ export const submissionSchema = z.object({
 export type Submission = z.infer<typeof submissionSchema>;
 
 export const newSubmissionSchema = z.object({
-  answers: z.record(z.string(), z.any()).optional().default({}),
+  answers: z.record(z.string().max(50), z.union([z.string().max(10000), z.number().finite(), z.boolean(), z.null()])).optional().default({}),
   idempotencyKey: z.string().optional(),
 });
 export type NewSubmission = z.infer<typeof newSubmissionSchema>;
 
 export const submissionFieldPatchSchema = z.object({
-  answers: z.record(z.string(), z.any()),
+  answers: z.record(z.string().max(50), z.union([z.string().max(10000), z.number().finite(), z.boolean(), z.null()])),
   expectedVersion: z.number().int(),
 });
 export type SubmissionFieldPatch = z.infer<typeof submissionFieldPatchSchema>;
@@ -459,7 +459,7 @@ export const submissionPublicSchema = z.object({
   workflowId: z.string(),
   studentId: z.string(),
   assignmentId: z.string(),
-  answers: z.record(z.string(), z.any()),
+  answers: z.record(z.string(), z.unknown()),
   status: submissionStatusSchema,
   stageIndex: z.number().int().nonnegative(),
   revision: z.number().int().positive(),
@@ -545,7 +545,7 @@ export const auditLogSchema = z.object({
   event: z.string(),
   targetEntity: z.string(),
   targetId: z.string(),
-  details: z.record(z.string(), z.any()).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
   timestamp: z.string().datetime(),
 });
 export type AuditLog = z.infer<typeof auditLogSchema>;

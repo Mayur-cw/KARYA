@@ -14,7 +14,7 @@ export function safeSignInRedirect(path: string | null, role: string) {
 }
 
 export default function DemoSignIn() {
-  const { login, loading, demoMode, demoActors, error: connectionError } = useAuth();
+  const { login, loading, demoMode, demoActors, presentationMode, error: connectionError } = useAuth();
   const actors = demoActors || SEEDED_ACTORS;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -45,16 +45,12 @@ export default function DemoSignIn() {
         <div className="eyebrow">A clearer way to work</div>
         <h2>Less back and forth.<br />More moving forward.</h2>
         <p>One place for your institution’s processes. Know what’s needed, who’s next, and where things stand.</p>
-        <div className="auth-process">
-          <div className="auth-process-item"><span><Icon name="file" /></span><div><strong>Start with clear instructions</strong><small>Turn requirements into a structured process.</small></div></div>
-          <div className="auth-process-item"><span><Icon name="layers" /></span><div><strong>Keep everything together</strong><small>Applications, documents, and review stages.</small></div></div>
-          <div className="auth-process-item"><span><Icon name="check" /></span><div><strong>Move ahead with confidence</strong><small>Human decisions with a traceable history.</small></div></div>
-        </div>
+        <img className="auth-art" src="/illustrations/workspace-desk.svg" width="620" height="440" alt="Illustrated desk with a laptop, application documents, and a completed review." />
         <div className="auth-story-footer"><Icon name="shield" size={16} />Separate roles. A shared sense of progress.</div>
       </section>
       <section className="auth-form-panel" aria-labelledby="sign-in-heading">
         <Link to="/" data-testid="EL-008" className="auth-back">Back to welcome</Link>
-        <div><span className="badge badge-draft">Local demo workspace</span><h1 id="sign-in-heading">Welcome to KARYA</h1><p className="auth-intro">Choose an account to explore your workspace. Each role has its own tools and access.</p></div>
+        <div><span className="badge badge-draft">{presentationMode ? 'Presentation demo' : 'Local demo workspace'}</span><h1 id="sign-in-heading">Welcome to KARYA</h1><p className="auth-intro">Choose an account to explore your workspace. Each role has its own tools and access.</p></div>
         {(errorMsg || connectionError) && <ErrorMessage title="We couldn’t sign you in" message={errorMsg || connectionError || ''} onRetry={() => setErrorMsg(null)} />}
         {demoMode === false && !loading && <div className="alert alert-info" role="status">Demo sign-in is disabled on this server. Contact your administrator for access.</div>}
         <form onSubmit={handleSubmit} aria-busy={submitting}>

@@ -579,3 +579,27 @@ input[type=checkbox], input[type=radio] { accent-color: var(--primary); min-widt
 .sidebar-profile-menu .profile-dropdown-signout svg {
   color: #ff8787;
 }
+
+/* Presentation artwork and global session controls. */
+.welcome-campus { margin: 0; position: relative; }
+.welcome-campus img { display: block; width: 100%; height: auto; border-radius: 26px; }
+.welcome-campus figcaption { position: absolute; bottom: 18px; left: 24px; right: 24px; text-align: center; color: #285e4c; font-size: .8125rem; }
+.auth-art { width: 100%; height: auto; max-height: 370px; object-fit: contain; margin: 16px 0 24px; }
+.dashboard-art { width: 115px; height: 88px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
+.global-signout { gap: 7px; }
+.global-signout-error { margin: 12px 38px 0; border: 1px solid var(--danger-border); background: var(--danger-bg); color: var(--danger); padding: 12px 16px; border-radius: 8px; font-size: .875rem; }
+.presentation-ribbon { padding: 9px 38px; display: flex; align-items: center; gap: 8px; color: #426252; background: #e9f2ec; border-bottom: 1px solid #d9e6dd; font-size: .75rem; }
+@media (max-width: 680px) {
+  .topbar-actions .avatar-small, .breadcrumb-root, .breadcrumb-divider { display: none; }
+  .global-signout { min-height: 38px; padding: 0 10px; }
+  .auth-art { max-height: 210px; margin: 10px 0 0; }
+  .dashboard-art { width: 70px; height: 60px; }
+  .dashboard-banner > svg { display: none; }
+  .dashboard-banner > .btn { margin-left: 0; }
+  .welcome-campus figcaption { font-size: .6875rem; bottom: 12px; left: 10px; right: 10px; }
+  .presentation-ribbon { padding: 9px 18px; }
+  .global-signout-error { margin: 10px 18px 0; }
+}
+
+/* Keep breadcrumb context readable on the light top bar. */
+.breadcrumb .breadcrumb-root { color: var(--ink-muted); }

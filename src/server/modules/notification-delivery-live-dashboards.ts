@@ -1,3 +1,4 @@
+import { refreshDueReminders } from '../reminders.js';
 import type { Request, Response } from 'express';
 import {
   getDb,
@@ -60,6 +61,8 @@ export function handleGetNotifications(req: Request, res: Response): void {
   const page = Math.max(1, parseInt(typeof req.query.page === 'string' ? req.query.page : '1', 10) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(typeof req.query.limit === 'string' ? req.query.limit : '20', 10) || 20));
 
+  refreshDueReminders(db, principal);
+
   // Compute unreadCount for recipient
   const unreadStmt = db.prepare(`
     SELECT COUNT(*) as count FROM notifications
@@ -76,14 +79,8 @@ export function handleGetNotifications(req: Request, res: Response): void {
     query += ' AND readAt IS NULL';
   }
 
-  query += ' ORDER BY createdAt DESC, id ASC';
-
-  const stmt = db.prepare(query);
-  const allRows = stmt.all(...params) as unknown as NotificationRow[];
-
-  const total = allRows.length;
-  const startIndex = (page - 1) * limit;
-  const pagedRows = allRows.slice(startIndex, startIndex + limit);
+  const total = (db.prepare(query.replace('SELECT *', 'SELECT COUNT(*) count')).get(...params) as { count: number }).count;
+  const pagedRows = db.prepare(query + ' ORDER BY createdAt DESC, id ASC LIMIT ? OFFSET ?').all(...params, limit, (page - 1) * limit) as unknown as NotificationRow[];
 
   const responsePayload: NotificationPage = {
     items: pagedRows.map(mapRowToPublic),
@@ -117,7 +114,8 @@ export function handlePatchNotification(req: Request, res: Response): void {
   }
 
   const parseResult = notificationMarkSchema.safeParse(req.body);
-  const action = parseResult.success ? parseResult.data.action : 'read';
+  if (!parseResult.success) { res.status(400).json({ code: 'INVALID_INPUT', message: 'Choose a valid notification action.' }); return; }
+  const action = parseResult.data.action;
 
   const now = new Date().toISOString();
   if (action === 'read') {

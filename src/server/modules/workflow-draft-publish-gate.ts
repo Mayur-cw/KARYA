@@ -1,3 +1,4 @@
+import { workflowPage } from '../queries.js';
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import {
@@ -7,7 +8,6 @@ import {
   workflowArchiveCommandSchema,
   type Workflow,
   type WorkflowScoped,
-  type WorkflowPage,
   type WorkflowStage,
 } from '../../shared/contracts.js';
 import {
@@ -94,85 +94,7 @@ export function handlePostWorkflow(req: Request, res: Response): void {
 // EP-013: GET /api/workflows
 // ==========================================
 export function handleGetWorkflows(req: Request, res: Response): void {
-  const principal = res.locals.principal!;
-  const db = getDb();
-  const wfRepo = new WorkflowRepository(db);
-  const docRepo = new SourceDocumentRepository(db);
-  const userRepo = new UserRepository(db);
-
-  const q = typeof req.query.q === 'string' ? req.query.q.toLowerCase().trim() : '';
-  const statusFilter = typeof req.query.status === 'string' ? req.query.status : '';
-  const page = Math.max(1, Number(req.query.page) || 1);
-  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
-
-  let candidateWorkflows: Workflow[] = [];
-
-  if (principal.role === 'admin') {
-    candidateWorkflows = wfRepo.listByDepartment(principal.departmentId);
-  } else if (principal.role === 'student') {
-    const assignRepo = new AssignmentRepository(db);
-    const myAssignments = assignRepo.listByStudent(principal.id);
-    const assignedWfIds = new Set(myAssignments.map((a) => a.workflowId));
-
-    const allWfs = wfRepo.listByDepartment(principal.departmentId);
-    candidateWorkflows = allWfs.filter(
-      (w) => assignedWfIds.has(w.id) && (w.status === 'published' || w.status === 'archived')
-    );
-  } else if (principal.role === 'reviewer') {
-    const allWfs = wfRepo.listByDepartment(principal.departmentId);
-    candidateWorkflows = allWfs.filter((w) => {
-      if (w.status !== 'published' && w.status !== 'archived') return false;
-      return (w.stages || []).some((s: WorkflowStage) => s.reviewerId === principal.id);
-    });
-  }
-
-  // Apply filters
-  if (q) {
-    candidateWorkflows = candidateWorkflows.filter((w) => w.title.toLowerCase().includes(q));
-  }
-  if (statusFilter) {
-    candidateWorkflows = candidateWorkflows.filter((w) => w.status === statusFilter);
-  }
-
-  const total = candidateWorkflows.length;
-  const startIndex = (page - 1) * limit;
-  const paginated = candidateWorkflows.slice(startIndex, startIndex + limit);
-
-  // Attach metadata
-  const items: WorkflowScoped[] = paginated.map((w) => {
-    let sourceDoc = null;
-    if (w.sourceId) {
-      const doc = docRepo.getById(w.sourceId);
-      if (doc) {
-        sourceDoc = {
-          id: doc.id,
-          departmentId: doc.departmentId,
-          ownerId: doc.ownerId,
-          title: doc.title,
-          mime: doc.mime,
-          sha256: doc.sha256,
-          extractedLength: doc.extractedText.length,
-          status: doc.status,
-          createdAt: doc.createdAt,
-        };
-      }
-    }
-    const creator = userRepo.getById(w.createdBy);
-    return {
-      ...w,
-      sourceDocument: sourceDoc,
-      createdByName: creator?.name || 'Administrator',
-    };
-  });
-
-  const responsePayload: WorkflowPage = {
-    items,
-    total,
-    page,
-    limit,
-  };
-
-  res.status(200).json(responsePayload);
+  res.status(200).json(workflowPage(getDb(), res.locals.principal!, req.query));
 }
 
 // ==========================================
@@ -200,7 +122,7 @@ export function handleGetWorkflowById(req: Request, res: Response): void {
     }
     const assignRepo = new AssignmentRepository(db);
     const assign = assignRepo.getByStudentAndWorkflow(principal.id, wf.id);
-    if (!assign) {
+    if (!assign || assign.status === 'revoked') {
       res.status(403).json({ code: 'FORBIDDEN', message: 'You are not assigned to this workflow' });
       return;
     }
@@ -239,7 +161,7 @@ export function handleGetWorkflowById(req: Request, res: Response): void {
   const creator = userRepo.getById(wf.createdBy);
   const responsePayload: WorkflowScoped = {
     ...wf,
-    sourceDocument: sourceDoc,
+    sourceDocument: principal.role === 'admin' ? sourceDoc : null,
     createdByName: creator?.name || 'Administrator',
   };
 

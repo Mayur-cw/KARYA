@@ -5,6 +5,10 @@ import { rateLimit } from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getConfig } from './config.js';
+import crypto from 'node:crypto';
+import { demoAccess } from './demo-access.js';
+import { refreshDueReminders } from './reminders.js';
+import { isPresentationEnabled } from './presentation-seed.js';
 import {
   authenticate,
   requireAuth,
@@ -82,12 +86,12 @@ import {
   SEEDED_USERS,
 } from './session.js';
 import { getDb, UserRepository } from './repository.js';
-import { demoLoginRequestSchema, type UserPublic } from '../shared/contracts.js';
+import { demoLoginRequestSchema } from '../shared/contracts.js';
 
 export function createApp() {
   const config = getConfig();
   const app = express();
-  app.set('trust proxy', 1);
+  app.set('trust proxy', config.TRUST_PROXY_HOPS);
   app.disable('x-powered-by');
 
   app.use(
@@ -97,7 +101,11 @@ export function createApp() {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'"],
-          imgSrc: ["'self'", 'data:'],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          frameAncestors: ["'none'"],
+          formAction: ["'self'"],
+          baseUri: ["'self'"],
+          objectSrc: ["'none'"],
           connectSrc: ["'self'"],
         },
       },
@@ -107,35 +115,9 @@ export function createApp() {
   app.use(
     cors({
       origin: (origin, cb) => {
-        if (!origin) return cb(null, true);
-        const allowed = config.ALLOWED_ORIGINS.split(',').map((x) => x.trim());
-        if (allowed.includes(origin)) return cb(null, true);
-        try {
-          const url = new URL(origin);
-          if (
-            url.hostname.endsWith('.onrender.com') ||
-            url.hostname.endsWith('.railway.app') ||
-            url.hostname.endsWith('.run.app') ||
-            url.hostname.endsWith('.vercel.app') ||
-            url.hostname.endsWith('.koyeb.app') ||
-            url.hostname.endsWith('.fly.dev')
-          ) {
-            return cb(null, true);
-          }
-        } catch {
-          // ignore malformed URL
-        }
-        if (config.NODE_ENV === 'development') {
-          try {
-            const url = new URL(origin);
-            if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('192.168.') || url.hostname.startsWith('10.') || /^172\.(1[6-9]|2\d|3[0-1])\./.test(url.hostname)) {
-              return cb(null, true);
-            }
-          } catch {
-            // invalid URL
-          }
-        }
-        return cb(null, false);
+        const allowed = config.ALLOWED_ORIGINS.split(',').map(value => value.trim());
+        // Same-origin requests need no CORS headers. Cross-origin clients require an exact allowlist entry.
+        cb(null, !origin || allowed.includes(origin));
       },
       credentials: true,
     })
@@ -147,17 +129,34 @@ export function createApp() {
       limit: 500,
       standardHeaders: 'draft-8',
       legacyHeaders: false,
-      validate: { xForwardedForHeader: false },
     })
   );
 
+  app.use(demoAccess(config.DEMO_ACCESS_PASSWORD));
+  app.use((_req, res, next) => {
+    res.locals.requestId = crypto.randomUUID();
+    res.setHeader('X-Request-Id', res.locals.requestId);
+    if (process.env.RENDER_GIT_COMMIT) res.setHeader('X-Karya-Revision', process.env.RENDER_GIT_COMMIT.slice(0, 12));
+    next();
+  });
   app.use(express.json({ limit: '64kb' }));
+  app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
   // Health check endpoints (EP-040 + /healthz)
   app.get('/healthz', handleGetHealthz);
   app.get('/api/healthz', handleGetHealthz);
 
   // Attach authentication context to all API routes
+  app.use('/api', (req, res, next) => {
+    const origin = req.get('origin');
+    const sameOrigin = `${req.protocol}://${req.get('host')}`;
+    const allowed = config.ALLOWED_ORIGINS.split(',').map(value => value.trim());
+    if (origin && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && origin !== sameOrigin && !allowed.includes(origin)) {
+      res.status(403).json({ code: 'FORBIDDEN', message: 'Request origin is not permitted.' });
+      return;
+    }
+    next();
+  });
   app.use('/api', authenticate);
 
   // CSRF protection for mutating API requests
@@ -175,46 +174,19 @@ export function createApp() {
     next();
   };
 
-  // EP-001 POST /api/auth/demo-login
-  app.post('/api/auth/demo-login', requireDemoMode, requireAnonymous, loginRateLimiter, (req, res) => {
-    const parseRes = demoLoginRequestSchema.safeParse(req.body);
-    if (!parseRes.success) {
-      res.status(400).json({
-        code: 'INVALID_INPUT',
-        message: 'Missing or malformed userId',
-        details: parseRes.error.issues,
-      });
-      return;
-    }
-
-    const { userId } = parseRes.data;
-    const allowlisted = SEEDED_USERS.find(candidate => candidate.id === userId);
-    if (!allowlisted) {
-      res.status(404).json({
-        code: 'NOT_FOUND',
-        message: `Demo user '${userId}' not found or not allowlisted`,
-      });
-      return;
-    }
-
-    let user: UserPublic = allowlisted;
-    try {
-      const dbUser = new UserRepository(getDb()).getById(userId);
-      if (dbUser?.active) {
-        user = dbUser;
-      }
-    } catch (dbErr) {
-      console.warn('Database query during session login failed, using allowlisted user:', dbErr);
-    }
-
+  const startDemoSession: express.RequestHandler = (req, res) => {
+    const result = demoLoginRequestSchema.safeParse(req.body);
+    if (!result.success) { res.status(400).json({ code: 'INVALID_INPUT', message: 'Missing or malformed userId' }); return; }
+    const allowlisted = SEEDED_USERS.some(user => user.id === result.data.userId);
+    const user = allowlisted ? new UserRepository(getDb()).getById(result.data.userId) : null;
+    if (!user?.active) { res.status(404).json({ code: 'NOT_FOUND', message: 'This demo account is unavailable.' }); return; }
+    const previous = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
+    if (previous) deleteSessionByToken(previous);
     const { sessionToken, csrfToken } = createSession(user);
     setSessionCookie(res, sessionToken);
-
-    res.status(201).json({
-      user,
-      csrfToken,
-    });
-  });
+    res.status(req.path === '/api/session' ? 200 : 201).json({ user, csrfToken });
+  };
+  app.post('/api/auth/demo-login', requireDemoMode, requireAnonymous, loginRateLimiter, startDemoSession);
 
   // EP-002 GET /api/auth/me
   app.get('/api/auth/me', requireAuth, (_req, res) => {
@@ -255,56 +227,12 @@ export function createApp() {
       user,
       csrfToken,
       demoMode: config.DEMO_MODE === 'true',
+      presentationMode: isPresentationEnabled(),
       demoActors: config.DEMO_MODE === 'true' ? SEEDED_USERS.filter(candidate => candidate.active) : [],
     });
   });
 
-  app.post('/api/session', requireDemoMode, loginRateLimiter, (req, res) => {
-    const parseRes = demoLoginRequestSchema.safeParse(req.body);
-    if (!parseRes.success) {
-      res.status(400).json({
-        code: 'INVALID_INPUT',
-        message: 'Missing or malformed userId',
-        details: parseRes.error.issues,
-      });
-      return;
-    }
-
-    const { userId } = parseRes.data;
-    const allowlisted = SEEDED_USERS.find(candidate => candidate.id === userId);
-    if (!allowlisted) {
-      res.status(404).json({
-        code: 'NOT_FOUND',
-        message: `Demo user '${userId}' not found or not allowlisted`,
-      });
-      return;
-    }
-
-    let user: UserPublic = allowlisted;
-    try {
-      const dbUser = new UserRepository(getDb()).getById(userId);
-      if (dbUser?.active) {
-        user = dbUser;
-      }
-    } catch (dbErr) {
-      console.warn('Database query during session login failed, using allowlisted user:', dbErr);
-    }
-
-    // Clear any previous session token if switching actor
-    const cookies = parseCookies(req.headers.cookie);
-    const existingToken = cookies[SESSION_COOKIE_NAME];
-    if (existingToken) {
-      deleteSessionByToken(existingToken);
-    }
-
-    const { sessionToken, csrfToken } = createSession(user);
-    setSessionCookie(res, sessionToken);
-
-    res.status(200).json({
-      user,
-      csrfToken,
-    });
-  });
+  app.post('/api/session', requireDemoMode, loginRateLimiter, startDemoSession);
 
   app.delete('/api/session', (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
@@ -327,6 +255,7 @@ export function createApp() {
       return;
     }
     const db = getDb();
+    refreshDueReminders(db, principal);
     const unreadStmt = db.prepare(`
       SELECT COUNT(*) as count FROM notifications
       WHERE recipientId = ? AND readAt IS NULL AND dismissedAt IS NULL
@@ -384,6 +313,7 @@ export function createApp() {
   // EP-035: Workflow CSV Report Export (Admin only)
   app.get('/api/workflows/:workflowId/report.csv', requireRoles('admin'), readRateLimiter, handleGetWorkflowReportCsv);
 
+  if (config.NODE_ENV === 'test') {
   // Route stub for testing student object isolation (IDOR guard)
   app.get('/api/submissions/:submissionId/test-scope', requireAuth, (req, res) => {
     const principal = res.locals.principal!;
@@ -394,6 +324,8 @@ export function createApp() {
     }
     res.status(200).json({ status: 'ok', ownerStudentId: targetStudentId });
   });
+
+  }
 
   // EP-008..EP-011: Document Management (Admin only)
   app.post('/api/documents', requireRoles('admin'), uploadRateLimiter, express.raw({ type: ['application/pdf', 'text/plain'], limit: '5mb' }), handlePostDocument);
@@ -412,19 +344,22 @@ export function createApp() {
   app.post('/api/workflows/:workflowId/publish', requireRoles('admin'), writeRateLimiter, handlePublishWorkflow);
   app.post('/api/workflows/:workflowId/archive', requireRoles('admin'), writeRateLimiter, handleArchiveWorkflow);
 
-  // Static files and client SPA fallback
+  // Unknown API paths return JSON instead of falling through to the SPA.
+  app.use('/api', (_req, res) => { res.status(404).json({ code: 'NOT_FOUND', message: 'API endpoint not found.' }); });
   const dirname = path.dirname(fileURLToPath(import.meta.url));
   const staticDir = path.resolve(dirname, '../../dist/client');
-  app.use(express.static(staticDir, { maxAge: '1h' }));
-  app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
-
-  // Global JSON error handler
-  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('Unhandled server error:', err);
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    const code = (err as { code?: string })?.code || 'INTERNAL_ERROR';
-    res.status(500).json({ code, message });
-  });
-
+  app.use(express.static(staticDir, { maxAge: '1h', index: false, setHeaders: (res, file) => {
+    if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  } }));
+  app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.sendFile(path.join(staticDir, 'index.html')); });
+  const errorHandler: express.ErrorRequestHandler = (error: unknown, _req, res, next) => {
+    if (res.headersSent) { next(error); return; }
+    const status = (error as { status?: number })?.status;
+    const safeStatus = status === 413 ? 413 : status === 400 ? 400 : 500;
+    const message = safeStatus === 413 ? 'Request exceeds the supported size.' : safeStatus === 400 ? 'Invalid request payload.' : 'Unable to complete the request. Please try again.';
+    if (safeStatus === 500) process.stderr.write(JSON.stringify({ level: 'error', requestId: res.locals.requestId, event: 'request_failed', name: error instanceof Error ? error.name : 'UnknownError' }) + '\n');
+    res.status(safeStatus).json({ code: safeStatus === 413 ? 'PAYLOAD_TOO_LARGE' : safeStatus === 400 ? 'INVALID_INPUT' : 'INTERNAL_ERROR', message, requestId: res.locals.requestId });
+  };
+  app.use(errorHandler);
   return app;
 }

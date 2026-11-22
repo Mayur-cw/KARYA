@@ -8,3 +8,13 @@ planning-private
 *.zip
 *.sha256
 examples
+
+.data
+.karya_storage
+dist
+dist-server
+*.db
+*.db-*
+*.sqlite
+*.pem
+*.key

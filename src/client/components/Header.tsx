@@ -15,10 +15,12 @@ const navigation: Record<string, { to: string; label: string; icon: IconName; en
 };
 
 export function Header() {
-  const { user, role, unreadCount, logout } = useAuth();
+  const { user, role, unreadCount, logout, loading, presentationMode } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [topbarMenuOpen, setTopbarMenuOpen] = useState(false);
   const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false);
   const topbarMenuRef = useRef<HTMLDivElement>(null);
@@ -59,11 +61,15 @@ export function Header() {
   const handleSignOut = async () => {
     setTopbarMenuOpen(false);
     setSidebarMenuOpen(false);
+    setSigningOut(true);
+    setLogoutError(null);
     try {
       await logout();
-      navigate('/login');
+      navigate('/login', { replace: true });
     } catch (err) {
-      console.error('Sign out error:', err);
+      setLogoutError(err instanceof Error ? err.message : 'Unable to sign out. Please try again.');
+    } finally {
+      setSigningOut(false);
     }
   };
 
@@ -156,17 +162,18 @@ export function Header() {
             </div>
             {sidebarMenuOpen && (
               <div className="sidebar-profile-menu" role="menu" aria-label="Sidebar account actions">
-                <Link to="/account" className="profile-dropdown-link" onClick={() => setSidebarMenuOpen(false)}>
+                <Link to="/account" className="profile-dropdown-link" role="menuitem" onClick={() => setSidebarMenuOpen(false)}>
                   <Icon name="user" size={16} />
                   <span>My Account</span>
                 </Link>
-                <Link to="/demo/signin" className="profile-dropdown-link" onClick={() => setSidebarMenuOpen(false)}>
+                <Link to="/login" className="profile-dropdown-link" role="menuitem" onClick={() => setSidebarMenuOpen(false)}>
                   <Icon name="sparkle" size={16} />
                   <span>Switch Demo Role</span>
                 </Link>
                 <button
                   type="button"
                   className="profile-dropdown-signout"
+                  role="menuitem"
                   onClick={handleSignOut}
                 >
                   <Icon name="exit" size={16} />
@@ -179,7 +186,7 @@ export function Header() {
       </aside>
       <header className="workspace-topbar">
         <div className="breadcrumb">
-          Workspace <span>/</span> <strong>{pageName}</strong>
+          <span className="breadcrumb-root">Workspace</span><span className="breadcrumb-divider">/</span> <strong>{pageName}</strong>
         </div>
         <div className="topbar-actions">
           <span className="today-label">
@@ -189,6 +196,7 @@ export function Header() {
             <Icon name="bell" />
             {unreadCount > 0 && <span className="notification-count">{unreadCount}</span>}
           </Link>
+          <button type="button" className="btn btn-secondary btn-sm global-signout" onClick={handleSignOut} disabled={signingOut || loading} aria-busy={signingOut}><Icon name="exit" size={16} /><span>{signingOut ? 'Signing out…' : 'Sign out'}</span></button>
           <div className="profile-menu-container" ref={topbarMenuRef}>
             <button
               type="button"
@@ -233,7 +241,7 @@ export function Header() {
                     {unreadCount > 0 && <span className="nav-count">{unreadCount}</span>}
                   </Link>
                   <Link
-                    to="/demo/signin"
+                    to="/login"
                     role="menuitem"
                     className="profile-dropdown-link"
                     onClick={() => setTopbarMenuOpen(false)}
@@ -260,6 +268,8 @@ export function Header() {
           </div>
         </div>
       </header>
+      {logoutError && <div className="global-signout-error" role="alert">{logoutError} Your session is still active. Please retry Sign out.</div>}
+      {presentationMode && <div className="presentation-ribbon"><Icon name="sparkle" size={14} />Presentation demo · Sample workflows and people</div>}
     </>
   );
 }

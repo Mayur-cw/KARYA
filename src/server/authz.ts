@@ -2,7 +2,6 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import type { Role, UserPublic } from '../shared/contracts.js';
 import { parseCookies, SESSION_COOKIE_NAME } from './security.js';
 import { getSessionByToken } from './session.js';
-import { getDb, UserRepository } from './repository.js';
 
 export type Principal = UserPublic;
 
@@ -31,13 +30,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   if (sessionToken) {
     const verified = getSessionByToken(sessionToken);
     if (verified) {
-      let user: UserPublic = verified.user;
-      try {
-        const dbUser = new UserRepository(getDb()).getById(verified.user.id);
-        if (dbUser) user = dbUser;
-      } catch {
-        // fallback to in-memory verified user
-      }
+      const user = verified.user;
       if (user?.active) {
         res.locals.principal = user;
         res.locals.session = verified.session;

@@ -9,6 +9,7 @@ import {
 } from '../repository.js';
 import type { AttachmentPublic, DeletionReceipt } from '../../shared/contracts.js';
 import { recordAudit } from '../events.js';
+import { attachmentDirectory } from '../storage.js';
 
 function getParam(param: string | string[] | undefined): string {
   if (!param) return '';
@@ -28,25 +29,7 @@ export interface AttachmentRow {
   createdAt: string;
 }
 
-const STORAGE_DIR = process.env.ATTACHMENT_STORAGE_DIR || path.join(process.cwd(), '.karya_storage', 'attachments');
-
-function ensureStorageDir(): string {
-  try {
-    if (!fs.existsSync(STORAGE_DIR)) {
-      fs.mkdirSync(STORAGE_DIR, { recursive: true });
-    }
-    const testFile = path.join(STORAGE_DIR, '.probe');
-    fs.writeFileSync(testFile, '');
-    fs.unlinkSync(testFile);
-    return STORAGE_DIR;
-  } catch {
-    const fallback = '/tmp/karya_attachments';
-    if (!fs.existsSync(fallback)) {
-      fs.mkdirSync(fallback, { recursive: true });
-    }
-    return fallback;
-  }
-}
+function ensureStorageDir(): string { return attachmentDirectory(); }
 
 export function sniffMime(buf: Buffer): 'application/pdf' | 'image/png' | 'image/jpeg' | null {
   if (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) {
@@ -271,7 +254,7 @@ export function handlePostAttachment(req: Request, res: Response): void {
   res.status(201).json(mapRowToPublic(createdRow));
 } catch (err) {
   console.error('ATTACHMENT_UPLOAD_ERROR:', err);
-  res.status(500).json({ code: 'INTERNAL_ERROR', message: String(err) });
+  res.status(500).json({ code: 'INTERNAL_ERROR', message: 'Unable to store the attachment. Please try again.' });
 }
 }
 

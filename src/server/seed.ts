@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { SEEDED_USERS } from './session.js';
+import { seedPresentation } from './presentation-seed.js';
 
 export function seedDatabase(db: DatabaseSync): void {
   const insertUser = db.prepare(`
@@ -19,4 +20,5 @@ export function seedDatabase(db: DatabaseSync): void {
       user.createdAt
     );
   }
+  seedPresentation(db);
 }

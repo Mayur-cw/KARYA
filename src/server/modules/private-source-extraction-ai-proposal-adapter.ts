@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
+import { z } from 'zod';
 import type { Request, Response } from 'express';
 import {
   sourceTitlePatchSchema,
+  workflowFieldSchema,
   type SourceDocument,
   type SourceDocumentPublic,
   type SourceMime,
@@ -28,31 +30,22 @@ interface GeminiApiResponse {
   candidates?: GeminiCandidate[];
 }
 
-interface RawStage {
-  label?: string;
-  reviewerId?: string;
-}
+const proposalResponseSchema = z.object({
+  title: z.string().trim().min(5).max(120),
+  fields: z.array(workflowFieldSchema).min(1).max(20),
+  stages: z.array(z.object({ label: z.string().min(1).max(100) })).min(1).max(3),
+  uncertainties: z.array(z.object({ kind: z.enum(['deadline', 'field', 'role', 'requirement', 'general']).optional(), description: z.string().max(2000).optional(), sourcePassage: z.string().max(10000).optional() })).max(40).optional(),
+  requirements: z.array(z.object({ text: z.string().min(1).max(2000), sourcePassage: z.string().min(1).max(10000), uncertain: z.boolean().optional(), uncertaintyReason: z.string().max(2000).optional() })).max(20).optional(),
+  deadline: z.string().max(100).nullable().optional(),
+});
 
-interface RawUncertainty {
-  kind?: 'deadline' | 'field' | 'role' | 'requirement' | 'general';
-  description?: string;
-  sourcePassage?: string;
-}
-
-interface RawRequirement {
-  text?: string;
-  sourcePassage?: string;
-  uncertain?: boolean;
-  uncertaintyReason?: string;
-}
-
-interface RawProposalJson {
-  title?: string;
-  fields?: WorkflowField[];
-  stages?: RawStage[];
-  uncertainties?: RawUncertainty[];
-  requirements?: RawRequirement[];
-  deadline?: string | null;
+export function groundRequirements(requirements: WorkflowRequirement[], source: string): WorkflowRequirement[] {
+  return requirements.map(requirement => {
+    const passage = requirement.sourcePassage || '';
+    const start = passage ? source.indexOf(passage) : -1;
+    if (start < 0) return { ...requirement, uncertain: true, uncertaintyReason: 'The proposed source passage could not be verified in the instruction.' };
+    return { ...requirement, startOffset: start, endOffset: start + passage.length };
+  });
 }
 
 export interface ExtractedSource {
@@ -191,8 +184,12 @@ export async function generateProposal(
     try {
       const aiResult = await callGeminiApi(sourceText, apiKey);
       if (aiResult) {
+        const requirements = groundRequirements(aiResult.requirements, sourceText);
+        const unverified = requirements.filter(requirement => requirement.uncertain);
         return {
           ...aiResult,
+          requirements,
+          uncertainties: [...aiResult.uncertainties, ...unverified.map(requirement => ({ id: `source-${requirement.id}`, kind: 'requirement' as const, description: requirement.uncertaintyReason || 'Verify this requirement against the source.', resolved: false })), ...(!requirements.length ? [{ id: 'source-missing', kind: 'general' as const, description: 'No verified source requirements were returned. Confirm the instruction before publication.', resolved: false }] : [])],
           origin: 'ai',
           confidenceNotes: 'Extracted via Google Gemini API. Please review source citations and resolve any flagged uncertainties before publication.',
         };
@@ -249,25 +246,27 @@ ${sourceText.slice(0, 15000)}
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  if (!/^[a-zA-Z0-9_.-]+$/.test(model)) { clearTimeout(timeoutId); throw new Error('Invalid AI model configuration'); }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 4096 },
     }),
     signal: controller.signal,
-  });
-  clearTimeout(timeoutId);
+  }).finally(() => clearTimeout(timeoutId));
 
   if (!response.ok) return null;
   const json = (await response.json()) as GeminiApiResponse;
   const textContent = json.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!textContent) return null;
 
-  const parsed = JSON.parse(textContent) as RawProposalJson;
-  if (!parsed.title || !Array.isArray(parsed.fields)) return null;
+  const checked = proposalResponseSchema.safeParse(JSON.parse(textContent));
+  if (!checked.success) return null;
+  const parsed = checked.data;
 
   return {
     title: String(parsed.title).slice(0, 120),
@@ -348,7 +347,7 @@ function generateManualProposal(
       id: 'unc-deadline',
       kind: 'deadline',
       description: 'Submission deadline is not specified in the source circular. Administrator must provide an explicit deadline before publication.',
-      sourcePassage: 'Submission deadline will be announced separately.',
+      sourcePassage: sourceText.includes('Submission deadline will be announced separately.') ? 'Submission deadline will be announced separately.' : undefined,
       resolved: false,
     });
   }
@@ -358,25 +357,14 @@ function generateManualProposal(
     id: 'unc-reviewers',
     kind: 'role',
     description: 'Specific faculty members are not designated in the circular text. Administrator must select named faculty reviewers for Stage 1 and Stage 2.',
-    sourcePassage: 'Faculty mentor verifies that the offer letter and enrollment details are complete.',
+    sourcePassage: undefined,
     resolved: false,
   });
 
-  const requirements: WorkflowRequirement[] = [
-    {
-      id: 'req-1',
-      text: 'Final-year applicants must provide their name, student ID, organization, start date and offer letter.',
-      sourcePassage: 'Eligible final-year internship applicants must provide their name, student ID, internship organization, internship start date, offer letter (PDF)',
-      uncertain: false,
-    },
-    {
-      id: 'req-2',
-      text: 'Submission deadline is pending announcement and must be resolved by administrator.',
-      sourcePassage: 'Submission deadline will be announced separately.',
-      uncertain: true,
-      uncertaintyReason: 'Missing deadline in source document',
-    },
-  ];
+  const passages = sourceText.split(/\n|(?<=[.!?])\s+/).map(value => value.trim()).filter(value => value.length > 15).slice(0, 12);
+  const requirements = groundRequirements(passages.map((passage, index) => ({ id: `req-${index + 1}`, text: passage.slice(0, 2000), sourcePassage: passage, uncertain: false })), sourceText);
+  if (!requirements.length) uncertainties.push({ id: 'unc-source', kind: 'requirement', description: 'Provide substantive instruction text before publishing.', resolved: false });
+
 
   return {
     title: sourceTitle.includes('Internship') ? sourceTitle : `${sourceTitle || 'Internship Approval Workflow'}`,

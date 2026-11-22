@@ -78,14 +78,8 @@ export function handleGetAuditLogs(req: Request, res: Response): void {
     params.push(eventQuery);
   }
 
-  query += ' ORDER BY timestamp DESC, id DESC';
-
-  const stmt = db.prepare(query);
-  const rows = stmt.all(...params) as unknown as AuditLogRow[];
-
-  const total = rows.length;
-  const startIndex = (page - 1) * limit;
-  const pagedRows = rows.slice(startIndex, startIndex + limit);
+  const total = (db.prepare(query.replace('SELECT *', 'SELECT COUNT(*) count')).get(...params) as { count: number }).count;
+  const pagedRows = db.prepare(query + ' ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?').all(...params, limit, (page - 1) * limit) as unknown as AuditLogRow[];
 
   const responsePayload: AuditPage = {
     items: pagedRows.map(mapRowToAuditLog),

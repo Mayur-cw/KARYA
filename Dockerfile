@@ -1,12 +1,11 @@
-# Resolve the base digest in an online environment before release; digest pinning is required by G9.
-FROM node:26-bookworm-slim AS builder
+FROM node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:26-bookworm-slim AS runtime
+FROM node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN groupadd --system app && useradd --system --gid app app
@@ -14,7 +13,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/dist ./dist
-RUN mkdir -p /app/.data /app/.karya_storage && chown -R app:app /app
+COPY --from=builder /app/src/server/migrations ./dist-server/server/migrations
+RUN mkdir -p /app/.data /app/.karya_storage/attachments && chown -R app:app /app/.data /app/.karya_storage
 USER app
 ENV PORT=8080
 EXPOSE 8080

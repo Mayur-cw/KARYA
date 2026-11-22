@@ -224,9 +224,15 @@ export default function WorkflowEditor() {
       setErrorMsg('Use a unique field key with letters, numbers, and underscores (up to 50 characters).');
       return;
     }
+    const choices = (tempField.options || []).map(value => value.trim()).filter(Boolean);
+    if (tempField.type === 'select' && (!choices.length || choices.length > 20 || new Set(choices).size !== choices.length || choices.some(value => value.length > 100))) {
+      setErrorMsg('Add between 1 and 20 unique options, each up to 100 characters.');
+      return;
+    }
     const finalField: DynamicField = {
       ...tempField,
       key,
+      options: tempField.type === 'select' ? choices : undefined,
     };
 
     if (editingFieldIndex !== null) {
@@ -915,9 +921,12 @@ export default function WorkflowEditor() {
             >
               <option value="text">Text (Single Line)</option>
                       <option value="date">Date</option>
+              <option value="select">Selection list</option>
               <option value="file">File Attachment (PDF / Image ≤ 5 MiB)</option>
             </select>
           </div>
+
+          {tempField.type === 'select' && <div className="form-group"><label htmlFor="field-options" className="form-label">Options, one per line</label><textarea id="field-options" className="form-textarea" value={(tempField.options || []).join('\n')} onChange={event => setTempField({ ...tempField, options: event.target.value.split('\n') })} placeholder="Research project\nIndustry internship\nCommunity initiative" /><span className="form-hint">Add up to 20 distinct choices.</span></div>}
 
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
             <input
@@ -1010,6 +1019,8 @@ export default function WorkflowEditor() {
               </label>
               {f.type === 'file' ? (
                 <input type="file" className="form-input" disabled />
+              ) : f.type === 'select' ? (
+                <select className="form-input" aria-label={f.label} disabled>{f.options?.map(option => <option key={option}>{option}</option>)}</select>
               ) : (
                 <input type={f.type} className="form-input" placeholder={f.placeholder} disabled />
               )}

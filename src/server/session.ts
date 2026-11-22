@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { UserPublic } from '../shared/contracts.js';
+import { getDb, UserRepository } from './repository.js';
 
 export interface Session {
   id: string;
@@ -61,81 +62,50 @@ export const SEEDED_USERS: UserPublic[] = [
   },
 ];
 
-// In-memory session store (can also query SQLite when repository is initialized)
-const sessionsByHash = new Map<string, Session>();
-const customUsers = new Map<string, UserPublic>();
-
+// Tokens are stored only as SHA-256 digests in SQLite, shared with the app's data.
 export function hashToken(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
+  const secret = process.env.SESSION_SECRET;
+  return secret ? crypto.createHmac('sha256', secret).update(token).digest('hex') : crypto.createHash('sha256').update(token).digest('hex');
 }
-
 export function findUserById(id: string): UserPublic | undefined {
-  const seeded = SEEDED_USERS.find((u) => u.id === id);
-  if (seeded) return seeded;
-  return customUsers.get(id);
+  return new UserRepository(getDb()).getById(id) || undefined;
 }
-
 export function registerCustomUser(user: UserPublic): void {
-  customUsers.set(user.id, user);
+  // User creation already persists the account in UserRepository.
+  if (!new UserRepository(getDb()).getById(user.id)) throw new Error('Account must be persisted before use');
 }
-
 export function createSession(user: UserPublic, ttlMs = 24 * 60 * 60 * 1000): { sessionToken: string; csrfToken: string; session: Session } {
+  const db = getDb();
+  const current = new UserRepository(db).getById(user.id);
+  if (!current?.active) throw new Error('Account is unavailable');
+  const now = Date.now();
+  db.prepare('DELETE FROM sessions WHERE expiresAt <= ?').run(now);
   const sessionToken = crypto.randomBytes(32).toString('hex');
   const csrfToken = crypto.randomBytes(24).toString('hex');
-  const tokenHash = hashToken(sessionToken);
-  const now = Date.now();
-
-  const session: Session = {
-    id: crypto.randomUUID(),
-    tokenHash,
-    userId: user.id,
-    csrfToken,
-    createdAt: now,
-    lastActiveAt: now,
-    expiresAt: now + ttlMs,
-  };
-
-  sessionsByHash.set(tokenHash, session);
+  const session: Session = { id: crypto.randomUUID(), tokenHash: hashToken(sessionToken), userId: current.id, csrfToken, createdAt: now, lastActiveAt: now, expiresAt: now + ttlMs };
+  db.prepare('INSERT INTO sessions (id, tokenHash, userId, csrfToken, createdAt, lastActiveAt, expiresAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(session.id, session.tokenHash, session.userId, session.csrfToken, session.createdAt, session.lastActiveAt, session.expiresAt);
   return { sessionToken, csrfToken, session };
 }
-
-export function getSessionByToken(sessionToken: string): { session: Session; user: UserPublic } | null {
-  if (!sessionToken) return null;
-  const tokenHash = hashToken(sessionToken);
-  const session = sessionsByHash.get(tokenHash);
-  if (!session) return null;
-
-  if (Date.now() > session.expiresAt) {
-    sessionsByHash.delete(tokenHash);
-    return null;
-  }
-
-  const user = findUserById(session.userId);
-  if (!user || !user.active) {
-    sessionsByHash.delete(tokenHash);
-    return null;
-  }
-
-  // Touch session
-  session.lastActiveAt = Date.now();
-  return { session, user };
+export function getSessionByToken(token: string): { session: Session; user: UserPublic } | null {
+  if (!/^[a-f0-9]{64}$/.test(token)) return null;
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM sessions WHERE tokenHash = ?').get(hashToken(token)) as unknown as Session | undefined;
+  if (!row) return null;
+  const now = Date.now();
+  const user = new UserRepository(db).getById(row.userId);
+  if (row.expiresAt <= now || !user?.active) { db.prepare('DELETE FROM sessions WHERE id = ?').run(row.id); return null; }
+  // Throttle idle-touch writes; expiration remains fixed and is checked on every request.
+  if (now - row.lastActiveAt > 60000) { db.prepare('UPDATE sessions SET lastActiveAt = ? WHERE id = ?').run(now, row.id); row.lastActiveAt = now; }
+  return { session: row, user };
 }
-
-export function deleteSessionByToken(sessionToken: string): boolean {
-  if (!sessionToken) return false;
-  const tokenHash = hashToken(sessionToken);
-  return sessionsByHash.delete(tokenHash);
+export function deleteSessionByToken(token: string): boolean {
+  return Number(getDb().prepare('DELETE FROM sessions WHERE tokenHash = ?').run(hashToken(token)).changes) > 0;
 }
-
 export function deleteSessionsByUserId(userId: string): void {
-  for (const [hash, session] of sessionsByHash.entries()) {
-    if (session.userId === userId) {
-      sessionsByHash.delete(hash);
-    }
-  }
+  getDb().prepare('DELETE FROM sessions WHERE userId = ?').run(userId);
 }
+export function clearAllSessions(): void { getDb().exec('DELETE FROM sessions'); }
 
-export function clearAllSessions(): void {
-  sessionsByHash.clear();
-  customUsers.clear();
+export function pruneExpiredSessions(): number {
+  return Number(getDb().prepare('DELETE FROM sessions WHERE expiresAt <= ?').run(Date.now()).changes);
 }

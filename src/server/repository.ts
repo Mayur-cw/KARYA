@@ -22,6 +22,7 @@ import type {
 } from '../shared/contracts.js';
 import { recordAudit, createNotification } from './events.js';
 import { seedDatabase } from './seed.js';
+import { dataDirectory } from './storage.js';
 
 // Strict SQLite database row schemas
 interface UserRow {
@@ -208,38 +209,9 @@ export function setDb(db: DatabaseSync): void {
 
 export function initDatabase(dbPath?: string): DatabaseSync {
   let resolvedPath = dbPath ?? (process.env.NODE_ENV === 'test' ? ':memory:' : undefined);
-  if (!resolvedPath) {
-    const dirname = path.dirname(fileURLToPath(import.meta.url));
-    const primaryDataDir = path.resolve(dirname, '../../.data');
-    let dataDir = primaryDataDir;
-    try {
-      if (!fs.existsSync(primaryDataDir)) {
-        fs.mkdirSync(primaryDataDir, { recursive: true });
-      }
-      const probe = path.join(primaryDataDir, '.probe');
-      fs.writeFileSync(probe, '');
-      fs.unlinkSync(probe);
-    } catch {
-      dataDir = '/tmp/karya_data';
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-    }
-    resolvedPath = path.join(dataDir, 'karya.db');
-  }
-
+  if (!resolvedPath) resolvedPath = path.join(dataDirectory(), 'karya.db');
   const db = new DatabaseSync(resolvedPath);
-  try {
-    db.exec('PRAGMA foreign_keys = ON;');
-    db.exec('PRAGMA journal_mode = WAL;');
-  } catch {
-    try {
-      db.exec('PRAGMA journal_mode = DELETE;');
-    } catch {
-      // pragma fallback
-    }
-  }
-
+  db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA synchronous = NORMAL; PRAGMA cache_size = -64000; PRAGMA temp_store = MEMORY;');
   // Run migration
   const dirname = path.dirname(fileURLToPath(import.meta.url));
   const migrationFile = path.resolve(dirname, 'migrations/001_init.sql');
@@ -249,6 +221,9 @@ export function initDatabase(dbPath?: string): DatabaseSync {
   } else {
     runEmbeddedSchema(db);
   }
+
+  const performanceMigration = path.resolve(dirname, 'migrations/002_query_indexes.sql');
+  if (fs.existsSync(performanceMigration)) db.exec(fs.readFileSync(performanceMigration, 'utf8'));
 
   // Seed default 5 demo users
   seedDatabase(db);
@@ -650,6 +625,15 @@ export class WorkflowRepository {
       return { success: false, error: 'Publication blocked: at least one student recipient must be assigned' };
     }
 
+    const users = new UserRepository(this.db);
+    for (const [index, stage] of current.stages.entries()) {
+      const reviewer = users.getById(stage.reviewerId);
+      if (stage.stageIndex !== index || !reviewer?.active || reviewer.role !== 'reviewer' || reviewer.departmentId !== current.departmentId) return { success: false, error: 'Publication blocked: review stages require active reviewers in this department, in sequence' };
+    }
+    const recipients = [...new Set(studentIds)];
+    if (recipients.some(id => { const user = users.getById(id); return !user?.active || user.role !== 'student' || user.departmentId !== current.departmentId; })) return { success: false, error: 'Publication blocked: recipients must be active students in this department' };
+    if (new Set(current.fields.map(field => field.key)).size !== current.fields.length) return { success: false, error: 'Publication blocked: field keys must be unique' };
+
     this.db.exec('BEGIN TRANSACTION;');
     try {
       const nextVersion = current.version + 1;
@@ -683,7 +667,7 @@ export class WorkflowRepository {
         VALUES (?, ?, ?, ?, ?, ?)
       `);
 
-      for (const studentId of studentIds) {
+      for (const studentId of recipients) {
         const assignId = crypto.randomUUID();
         stmtAssign.run(assignId, workflowId, studentId, 'invited', now, null);
 
@@ -704,7 +688,7 @@ export class WorkflowRepository {
         event: 'published',
         targetEntity: 'Workflow',
         targetId: current.id,
-        details: { version: nextVersion, assignedCount: studentIds.length, deadline: current.deadline },
+        details: { version: nextVersion, assignedCount: recipients.length, deadline: current.deadline },
       });
 
       this.db.exec('COMMIT;');
@@ -906,7 +890,7 @@ export class SubmissionRepository {
     workflowId: string,
     studentId: string,
     assignmentId: string,
-    initialAnswers: Record<string, unknown> = {}
+    initialAnswers: Submission['answers'] = {}
   ): Submission {
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
