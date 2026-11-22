@@ -35,12 +35,12 @@ interface UserRow {
 interface AttachmentRow {
   id: string;
   submissionId: string;
-  uploaderId: string;
-  fileName: string;
-  mimeType: string;
-  byteSize: number;
-  checksumSha256: string;
-  storageKey: string;
+  uploadedBy: string;
+  displayName: string;
+  mime: string;
+  bytes: number;
+  sha256: string;
+  privateStorageKey: string;
   status: 'draft' | 'locked' | 'removed';
   createdAt: string;
 }
@@ -79,9 +79,9 @@ export function enrichSubmission(
   const attachments: AttachmentPublic[] = attRows.map((a) => ({
     id: a.id,
     submissionId: a.submissionId,
-    displayName: a.fileName,
-    mime: a.mimeType,
-    bytes: a.byteSize,
+    displayName: a.displayName,
+    mime: a.mime,
+    bytes: a.bytes,
     status: a.status,
     createdAt: a.createdAt,
   }));

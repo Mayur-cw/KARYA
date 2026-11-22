@@ -60,6 +60,12 @@ import {
 } from './modules/dynamic-submissions-deadlines.js';
 import { handlePostSubmissionDecision } from './modules/multi-stage-review-atomics.js';
 import {
+  handlePostAttachment,
+  handleGetAttachment,
+  handlePatchAttachment,
+  handleDeleteAttachment,
+} from './modules/private-upload-references-file-streaming.js';
+import {
   findUserById,
   createSession,
   deleteSessionByToken,
@@ -209,6 +215,18 @@ export function createApp() {
 
   // EP-029: Multi-Stage Review Decision (Reviewer only)
   app.post('/api/submissions/:submissionId/decision', requireRoles('reviewer'), writeRateLimiter, handlePostSubmissionDecision);
+
+  // EP-036..EP-039: Private Upload References & File Streaming
+  app.post(
+    '/api/submissions/:submissionId/attachments',
+    requireRoles('student'),
+    uploadRateLimiter,
+    express.raw({ type: () => true, limit: '6mb' }),
+    handlePostAttachment
+  );
+  app.get('/api/attachments/:attachmentId', requireAuth, readRateLimiter, handleGetAttachment);
+  app.patch('/api/attachments/:attachmentId', requireRoles('student'), writeRateLimiter, handlePatchAttachment);
+  app.delete('/api/attachments/:attachmentId', requireRoles('student'), writeRateLimiter, handleDeleteAttachment);
 
   // Route stub for testing student object isolation (IDOR guard)
   app.get('/api/submissions/:submissionId/test-scope', requireAuth, (req, res) => {
