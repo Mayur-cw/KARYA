@@ -51,6 +51,14 @@ import {
   handleDeleteAssignment,
 } from './modules/cohort-eligibility-assignee-policies.js';
 import {
+  handlePostWorkflowSubmissions,
+  handleGetSubmissions,
+  handleGetSubmissionById,
+  handlePatchSubmission,
+  handleSubmitSubmission,
+  handleDeleteSubmission,
+} from './modules/dynamic-submissions-deadlines.js';
+import {
   findUserById,
   createSession,
   deleteSessionByToken,
@@ -190,16 +198,13 @@ export function createApp() {
   app.patch('/api/assignments/:assignmentId', requireRoles('admin'), writeRateLimiter, handlePatchAssignment);
   app.delete('/api/assignments/:assignmentId', requireRoles('admin'), writeRateLimiter, handleDeleteAssignment);
 
-  // Route stub for student-only submission creation (EP-023)
-  app.post('/api/workflows/:workflowId/submissions', requireRoles('student'), (req, res) => {
-    res.status(201).json({
-      id: 'sub-mock-123',
-      workflowId: req.params.workflowId,
-      studentId: res.locals.principal?.id,
-      status: 'draft',
-      version: 1,
-    });
-  });
+  // EP-023..EP-028: Dynamic Submissions and Deadlines
+  app.post('/api/workflows/:workflowId/submissions', requireRoles('student'), writeRateLimiter, handlePostWorkflowSubmissions);
+  app.get('/api/submissions', requireAuth, readRateLimiter, handleGetSubmissions);
+  app.get('/api/submissions/:submissionId', requireAuth, readRateLimiter, handleGetSubmissionById);
+  app.patch('/api/submissions/:submissionId', requireRoles('student'), writeRateLimiter, handlePatchSubmission);
+  app.post('/api/submissions/:submissionId/submit', requireRoles('student'), writeRateLimiter, handleSubmitSubmission);
+  app.delete('/api/submissions/:submissionId', requireRoles('student'), writeRateLimiter, handleDeleteSubmission);
 
   // Route stub for reviewer-only decision (EP-029)
   app.post('/api/submissions/:submissionId/decision', requireRoles('reviewer'), (_req, res) => {

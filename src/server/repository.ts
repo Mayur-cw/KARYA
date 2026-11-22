@@ -850,6 +850,20 @@ export class AssignmentRepository {
     stmt.run(reason, assignmentId);
     return true;
   }
+
+  createAssignments(workflowId: string, studentIds: string[]): Assignment[] {
+    const now = new Date().toISOString();
+    const created: Assignment[] = [];
+    for (const studentId of studentIds) {
+      const id = crypto.randomUUID();
+      this.db.prepare(`
+        INSERT INTO assignments (id, workflowId, studentId, status, assignedAt)
+        VALUES (?, ?, ?, 'invited', ?)
+      `).run(id, workflowId, studentId, now);
+      created.push({ id, workflowId, studentId, status: 'invited', assignedAt: now, revokeReason: null });
+    }
+    return created;
+  }
 }
 
 export class SubmissionRepository {
@@ -937,6 +951,31 @@ export class SubmissionRepository {
     if (res.changes === 0) return null;
 
     return this.getById(id);
+  }
+
+  deleteDraft(submissionId: string, studentId: string, expectedVersion: number): { success: boolean; error?: string } {
+    const current = this.getById(submissionId);
+    if (!current) return { success: false, error: 'Submission not found' };
+    if (current.studentId !== studentId) return { success: false, error: 'Forbidden' };
+    if (current.status !== 'draft') {
+      return { success: false, error: `Cannot delete submission in status '${current.status}'` };
+    }
+    if (current.version !== expectedVersion) {
+      return { success: false, error: 'Version mismatch: submission has changed' };
+    }
+
+    this.db.exec('BEGIN TRANSACTION;');
+    try {
+      this.db.prepare('DELETE FROM attachments WHERE submissionId = ?').run(submissionId);
+      this.db.prepare('DELETE FROM submissions WHERE id = ?').run(submissionId);
+      this.db.prepare("UPDATE assignments SET status = 'invited' WHERE id = ?").run(current.assignmentId);
+      this.db.exec('COMMIT;');
+      return { success: true };
+    } catch (err) {
+      this.db.exec('ROLLBACK;');
+      const msg = err instanceof Error ? err.message : 'Draft deletion failed';
+      return { success: false, error: msg };
+    }
   }
 
   submitAtomic(
