@@ -18,6 +18,8 @@ import {
   loginRateLimiter,
   uploadRateLimiter,
   aiRateLimiter,
+  writeRateLimiter,
+  readRateLimiter,
   setSessionCookie,
   clearSessionCookie,
   parseCookies,
@@ -30,6 +32,14 @@ import {
   handleDeleteDocument,
   handleProposeWorkflow,
 } from './modules/private-source-extraction-ai-proposal-adapter.js';
+import {
+  handlePostWorkflow,
+  handleGetWorkflows,
+  handleGetWorkflowById,
+  handlePatchWorkflow,
+  handlePublishWorkflow,
+  handleArchiveWorkflow,
+} from './modules/workflow-draft-publish-gate.js';
 import {
   findUserById,
   createSession,
@@ -206,6 +216,14 @@ export function createApp() {
 
   // EP-016: Workflow Proposal Generation (Admin only)
   app.post('/api/workflows/:workflowId/propose', requireRoles('admin'), aiRateLimiter, handleProposeWorkflow);
+
+  // EP-012..EP-018: Workflow Lifecycle & Publish Gate
+  app.post('/api/workflows', requireRoles('admin'), writeRateLimiter, handlePostWorkflow);
+  app.get('/api/workflows', requireAuth, readRateLimiter, handleGetWorkflows);
+  app.get('/api/workflows/:workflowId', requireAuth, readRateLimiter, handleGetWorkflowById);
+  app.patch('/api/workflows/:workflowId', requireRoles('admin'), writeRateLimiter, handlePatchWorkflow);
+  app.post('/api/workflows/:workflowId/publish', requireRoles('admin'), writeRateLimiter, handlePublishWorkflow);
+  app.post('/api/workflows/:workflowId/archive', requireRoles('admin'), writeRateLimiter, handleArchiveWorkflow);
 
   // Static files and client SPA fallback
   const dirname = path.dirname(fileURLToPath(import.meta.url));
