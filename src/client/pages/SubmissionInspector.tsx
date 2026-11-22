@@ -29,6 +29,7 @@ interface WorkflowDetail {
   title: string;
   description?: string;
   deadline: string;
+  fields?: Array<{ key: string; label: string; type: string; required: boolean }>;
   schema?: {
     fields: Array<{
       id: string;
@@ -38,7 +39,7 @@ interface WorkflowDetail {
     }>;
   };
   stages?: Array<{
-    name: string;
+    label: string;
     reviewerId: string;
     reviewerName?: string;
   }>;
@@ -130,7 +131,7 @@ export default function SubmissionInspector() {
   };
 
   // EL-138 Open attached evidence
-  const handleOpenEvidence = (attId: string, _fileName: string) => {
+  const handleOpenEvidence = (attId: string) => {
     window.open(`/api/attachments/${attId}`, '_blank');
     showToast('Evidence securely streamed');
   };
@@ -161,7 +162,7 @@ export default function SubmissionInspector() {
         />
         <div style={{ marginTop: '16px' }}>
           <Link to="/admin/workflows" data-testid="EL-141" className="btn btn-secondary">
-            ← Return to Workflows
+            Return to Workflows
           </Link>
         </div>
       </div>
@@ -175,7 +176,7 @@ export default function SubmissionInspector() {
     : '/admin/workflows';
 
   const currentStageName =
-    workflow?.stages?.[submission.stageIndex]?.name || `Stage ${submission.stageIndex}`;
+    workflow?.stages?.[submission.stageIndex]?.label || `Stage ${submission.stageIndex}`;
 
   return (
     <div className="submission-inspector-page" data-testid="page-p-019" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -194,7 +195,7 @@ export default function SubmissionInspector() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
             <Link to={monitorUrl} data-testid="EL-141" className="btn btn-secondary btn-sm" aria-label="Back to participation monitor">
-              ← Process Monitor
+              Process Monitor
             </Link>
             <span className="badge badge-draft">Admin Inspector</span>
             <StatusBadge status={submission.status} />
@@ -273,7 +274,7 @@ export default function SubmissionInspector() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
           gap: '24px',
           alignItems: 'start',
         }}
@@ -286,7 +287,7 @@ export default function SubmissionInspector() {
               Participation Summary
             </h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '16px' }}>
               <div>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)' }}>Student Applicant</span>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ink-primary)', marginTop: '2px' }}>
@@ -333,13 +334,13 @@ export default function SubmissionInspector() {
               Submitted Field Answers
             </h2>
 
-            {workflow?.schema?.fields && workflow.schema.fields.length > 0 ? (
+            {(workflow?.fields || workflow?.schema?.fields) && (workflow.fields || workflow.schema?.fields || []).length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {workflow.schema.fields.map((field) => {
-                  const val = submission.answers[field.id];
+                {(workflow.fields || workflow.schema?.fields || []).map((field) => {
+                  const val = submission.answers['key' in field ? field.key : field.id];
                   return (
                     <div
-                      key={field.id}
+                      key={'key' in field ? field.key : field.id}
                       style={{
                         padding: '12px 16px',
                         backgroundColor: 'var(--bg-subtle)',
@@ -352,7 +353,7 @@ export default function SubmissionInspector() {
                       </div>
                       <div style={{ fontSize: '15px', color: 'var(--ink-primary)', whiteSpace: 'pre-wrap' }}>
                         {val !== undefined && val !== null && String(val).trim() !== ''
-                          ? String(val)
+                          ? field.type === 'file' ? (submission.attachments?.find(attachment => attachment.id === val)?.displayName || 'Attached document') : String(val)
                           : <em style={{ color: 'var(--ink-muted)' }}>Not provided</em>}
                       </div>
                     </div>
@@ -413,7 +414,7 @@ export default function SubmissionInspector() {
                       type="button"
                       data-testid="EL-138"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => handleOpenEvidence(att.id, att.displayName)}
+                      onClick={() => handleOpenEvidence(att.id)}
                       aria-label={`Open attached evidence ${att.displayName}`}
                     >
                       Inspect / Stream ↗

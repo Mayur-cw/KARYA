@@ -496,13 +496,21 @@ export function handleSubmitSubmission(req: Request, res: Response): void {
   for (const field of wf.fields) {
     if (field.required) {
       const val = sub.answers?.[field.key];
-      if (val === undefined || val === null || val === '') {
+      if (val === undefined || val === null || (typeof val === 'string' && !val.trim())) {
         validationErrors.push({
           field: field.key,
           message: `Field "${field.label}" is required`,
         });
       }
     }
+  }
+
+  for (const field of wf.fields) {
+    if (field.type !== 'file') continue;
+    const reference = sub.answers?.[field.key];
+    if (!reference) continue;
+    const attachment = typeof reference === 'string' ? db.prepare("SELECT id FROM attachments WHERE id = ? AND submissionId = ? AND status != 'removed'").get(reference, sub.id) : undefined;
+    if (!attachment) validationErrors.push({ field: field.key, message: `Attach a valid document for "${field.label}".` });
   }
 
   if (validationErrors.length > 0) {

@@ -66,22 +66,12 @@ export default function InstructionIntake() {
     setErrorMsg(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const result = await api<{
-        source: {
-          id: string;
-          fileName: string;
-          byteSize: number;
-          sha256: string;
-        };
-      }>('/api/sources/upload', {
+      const result = await api<{ id: string; sha256: string }>('/api/documents', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/pdf', 'x-document-title': encodeURIComponent(file.name) },
+        body: file,
       });
-
-      setUploadedSource(result.source);
+      setUploadedSource({ ...result, fileName: file.name, byteSize: file.size });
       if (!title) {
         setTitle(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
       }
@@ -103,7 +93,7 @@ export default function InstructionIntake() {
     setErrorMsg(null);
 
     try {
-      await api(`/api/sources/${uploadedSource.id}`, { method: 'DELETE' });
+      await api(`/api/documents/${uploadedSource.id}`, { method: 'DELETE' });
       setUploadedSource(null);
       setToastMessage('Source document removed');
       setTimeout(() => setToastMessage(null), 3000);
@@ -168,7 +158,7 @@ export default function InstructionIntake() {
       {/* Return to Registry link (EL-029) */}
       <div style={{ marginBottom: '16px' }}>
         <Link to="/admin/workflows" data-testid="EL-029" className="btn btn-secondary btn-sm">
-          ← Return to Registry
+          Return to Registry
         </Link>
       </div>
 
@@ -177,9 +167,9 @@ export default function InstructionIntake() {
           <span className="badge badge-published" style={{ marginBottom: '8px' }}>
             Intake Studio
           </span>
-          <h1>Instruction Intake & AI Synthesis</h1>
+          <h1>Intake studio</h1>
           <p className="card-subtitle">
-            Ingest official mandates, policies, or text PDFs to automatically synthesize explainable approval workflows.
+            Start with an official instruction. Build a clear process for the people who need to act on it.
           </p>
         </div>
       </div>
@@ -203,7 +193,7 @@ export default function InstructionIntake() {
       <form onSubmit={handleCreateWorkflow}>
         {/* EL-027 Workflow Title */}
         <div className="card" style={{ marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>1. Workflow Identification</h2>
+          <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Name your workflow</h2>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label htmlFor="workflow-title-input" className="form-label">
               Workflow Title *
@@ -231,7 +221,7 @@ export default function InstructionIntake() {
         <div className="card" style={{ marginBottom: '24px' }}>
           <h2 style={{ fontSize: '18px', marginBottom: '8px' }}>2. Circular Document or Instruction Ingestion</h2>
           <p style={{ fontSize: '14px', color: 'var(--ink-secondary)', marginBottom: '20px' }}>
-            Provide either an official text-based PDF or enter plain regulation text. KARYA will ground all extracted fields with exact character offset references.
+            Provide either an official text-based PDF or enter plain regulation text. Review the proposed requirements and confirm open questions before publishing.
           </p>
 
           {/* PDF Upload (EL-026, EL-025) */}
@@ -346,7 +336,7 @@ export default function InstructionIntake() {
             className="btn btn-primary"
             disabled={!canSubmit || creating || uploading}
           >
-            {creating ? 'Creating Workflow Draft...' : 'Create Editable Workflow →'}
+            {creating ? 'Creating Workflow Draft...' : 'Create Editable Workflow'}
           </button>
         </div>
       </form>

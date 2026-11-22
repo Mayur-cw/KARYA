@@ -19,10 +19,10 @@ describe('P-011 Submission Workspace Page and Elements (T-A11Y-P011, EL-069..EL-
     status: 'published',
     deadline: new Date(Date.now() + 86400000).toISOString(),
     fields: [
-      { id: 'f-1', name: 'project_title', label: 'Project Title', type: 'text', required: true },
-      { id: 'f-2', name: 'synopsis', label: 'Research Synopsis', type: 'textarea', required: false },
+      { key: 'project_title', label: 'Project Title', type: 'text', required: true },
+      { key: 'synopsis', label: 'Research Synopsis', type: 'text', required: false },
     ],
-    stages: [{ stageIndex: 0, name: 'Faculty Mentor Review' }],
+    stages: [{ stageIndex: 0, label: 'Faculty Mentor Review' }],
   };
 
   const mockSubmission = {
@@ -41,8 +41,9 @@ describe('P-011 Submission Workspace Page and Elements (T-A11Y-P011, EL-069..EL-
         createdAt: new Date().toISOString(),
       },
     ],
-    decisions: [],
-    currentStageIndex: 0,
+    history: [],
+    stageIndex: 0,
+    version: 1,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     workflow: mockWorkflow,
@@ -183,4 +184,39 @@ describe('P-011 Submission Workspace Page and Elements (T-A11Y-P011, EL-069..EL-
       expect.objectContaining({ method: 'POST' })
     );
   });
+  async function mountSubmission() {
+    await act(async () => { render(<MemoryRouter initialEntries={['/student/submissions/sub-work-123']}><Routes><Route path="/student/submissions/:submissionId" element={<SubmissionWorkspace />} /></Routes></MemoryRouter>); });
+  }
+  it('saves changed answers with the server version', async () => {
+    await mountSubmission();
+    await act(async () => { fireEvent.change(screen.getByLabelText('Project Title', { exact: false }), { target: { value: 'Revised research topic' } }); });
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-070')); });
+    expect(apiModule.api).toHaveBeenCalledWith('/api/submissions/sub-work-123', { method: 'PATCH', body: JSON.stringify({ answers: { project_title: 'Revised research topic' }, expectedVersion: 1 }) });
+  });
+  it('uses the actual attachment response and updates its displayed name', async () => {
+    await mountSubmission();
+    vi.mocked(apiModule.api).mockResolvedValueOnce({ id: 'new-document', displayName: 'New offer.pdf', mime: 'application/pdf', bytes: 100, createdAt: new Date().toISOString() });
+    const file = new File(['%PDF-1.4 sample'], 'New offer.pdf', { type: 'application/pdf' });
+    await act(async () => { fireEvent.change(screen.getByTestId('EL-071'), { target: { files: [file] } }); });
+    expect(screen.getByText('New offer.pdf')).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getAllByTestId('EL-073')[1]); });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Verified offer.pdf' } }); });
+    await act(async () => { fireEvent.click(screen.getByText('Save Name')); });
+    expect(screen.getByText('Verified offer.pdf')).toBeDefined();
+    expect(apiModule.api).toHaveBeenCalledWith('/api/attachments/new-document', { method: 'PATCH', body: JSON.stringify({ displayName: 'Verified offer.pdf' }) });
+    await act(async () => { fireEvent.click(screen.getAllByTestId('EL-074')[1]); });
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-082')); });
+    expect(screen.queryByText('Verified offer.pdf')).toBeNull();
+  });
+  it('opens requirements and history without losing edited answers', async () => {
+    await mountSubmission();
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-075')); });
+    expect(screen.getByRole('dialog')).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Close dialog' })); });
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-080')); });
+    expect(screen.getByRole('dialog')).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Close dialog' })); });
+    expect((screen.getByLabelText('Project Title', { exact: false }) as HTMLInputElement).value).toBe('AI Robotics');
+  });
+
 });

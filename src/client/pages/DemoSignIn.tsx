@@ -2,177 +2,75 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, SEEDED_ACTORS } from '../components/AuthContext';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { Icon } from '../components/Icon';
+
+export function safeSignInRedirect(path: string | null, role: string) {
+  const home = `/${role}`;
+  if (!path || !path.startsWith('/') || path.startsWith('//') || /[\\\s]/.test(path)) return home;
+  const url = new URL(path, 'https://karya.local');
+  const pathname = url.pathname;
+  if (pathname === '/account' || pathname === '/notifications' || pathname === home || pathname.startsWith(`${home}/`)) return `${pathname}${url.search}${url.hash}`;
+  return home;
+}
 
 export default function DemoSignIn() {
-  const { login } = useAuth();
+  const { login, loading, demoMode, demoActors, error: connectionError } = useAuth();
+  const actors = demoActors || SEEDED_ACTORS;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectPath = searchParams.get('redirect') || '/';
-
   const [selectedId, setSelectedId] = useState<string>(SEEDED_ACTORS[0].id);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const selectedActor = actors.find(a => a.id === selectedId) || actors[0];
+  const enabled = demoMode !== false && !!selectedActor;
 
-  const selectedActor = SEEDED_ACTORS.find((a) => a.id === selectedId) || SEEDED_ACTORS[0];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!enabled || submitting || loading) return;
     setSubmitting(true);
     setErrorMsg(null);
     try {
-      await login(selectedId);
-      // Navigate to redirect path or role-specific landing
-      if (redirectPath && redirectPath !== '/') {
-        navigate(redirectPath);
-      } else {
-        if (selectedActor.role === 'admin') navigate('/admin');
-        else if (selectedActor.role === 'student') navigate('/student');
-        else if (selectedActor.role === 'reviewer') navigate('/reviewer');
-        else navigate('/');
-      }
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Authentication failed');
+      await login(selectedActor.id);
+      navigate(safeSignInRedirect(searchParams.get('redirect'), selectedActor.role), { replace: true });
+    } catch (error: unknown) {
+      setErrorMsg(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <div className="demo-sign-in-page" data-testid="page-p-002" style={{ maxWidth: '720px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '16px' }}>
-        <Link to="/" data-testid="EL-008" className="btn btn-secondary btn-sm">
-          ← Back to Welcome
-        </Link>
-      </div>
-
-      <div className="card" style={{ marginBottom: '24px' }}>
-        <div className="card-header">
-          <div>
-            <span className="badge badge-published" style={{ marginBottom: '8px' }}>
-              Evaluation Environment
-            </span>
-            <h1>Demo Authentication Desk</h1>
-            <p className="card-subtitle">
-              Select a pre-seeded authorized institutional identity to test end-to-end governance.
-            </p>
-          </div>
+  return <div className="demo-sign-in-page" data-testid="page-p-002">
+    <div className="auth-grid">
+      <section className="auth-story" aria-label="Your KARYA workspace">
+        <div className="eyebrow">A clearer way to work</div>
+        <h2>Less back and forth.<br />More moving forward.</h2>
+        <p>One place for your institution’s processes. Know what’s needed, who’s next, and where things stand.</p>
+        <div className="auth-process">
+          <div className="auth-process-item"><span><Icon name="file" /></span><div><strong>Start with clear instructions</strong><small>Turn requirements into a structured process.</small></div></div>
+          <div className="auth-process-item"><span><Icon name="layers" /></span><div><strong>Keep everything together</strong><small>Applications, documents, and review stages.</small></div></div>
+          <div className="auth-process-item"><span><Icon name="check" /></span><div><strong>Move ahead with confidence</strong><small>Human decisions with a traceable history.</small></div></div>
         </div>
-
-        {/* Demo Mode Notice */}
-        <div className="alert alert-info" style={{ marginBottom: '24px' }}>
-          <div>
-            <strong>Evaluation Mode Active:</strong> Direct cryptographic sessions are established using server-allowlisted actors. No plaintext passwords required for judge evaluation.
-          </div>
-        </div>
-
-        {errorMsg && (
-          <ErrorMessage
-            title="Authentication Error"
-            message={errorMsg}
-            code="AUTH_FAILED"
-            onRetry={() => setErrorMsg(null)}
-          />
-        )}
-
-        <form onSubmit={handleSubmit}>
+        <div className="auth-story-footer"><Icon name="shield" size={16} />Separate roles. A shared sense of progress.</div>
+      </section>
+      <section className="auth-form-panel" aria-labelledby="sign-in-heading">
+        <Link to="/" data-testid="EL-008" className="auth-back">Back to welcome</Link>
+        <div><span className="badge badge-draft">Local demo workspace</span><h1 id="sign-in-heading">Welcome to KARYA</h1><p className="auth-intro">Choose an account to explore your workspace. Each role has its own tools and access.</p></div>
+        {(errorMsg || connectionError) && <ErrorMessage title="We couldn’t sign you in" message={errorMsg || connectionError || ''} onRetry={() => setErrorMsg(null)} />}
+        {demoMode === false && !loading && <div className="alert alert-info" role="status">Demo sign-in is disabled on this server. Contact your administrator for access.</div>}
+        <form onSubmit={handleSubmit} aria-busy={submitting}>
           <div className="form-group">
-            <label htmlFor="demo-identity-select" className="form-label">
-              Choose Demo Persona
-            </label>
-            <select
-              id="demo-identity-select"
-              data-testid="EL-006"
-              className="form-select"
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              disabled={submitting}
-            >
-              {SEEDED_ACTORS.map((actor) => (
-                <option key={actor.id} value={actor.id}>
-                  {actor.name} — {actor.title} ({actor.role.toUpperCase()})
-                </option>
-              ))}
+            <label htmlFor="demo-identity-select" className="form-label">Your demo account</label>
+            <select id="demo-identity-select" data-testid="EL-006" className="form-select" value={selectedActor?.id || ''} onChange={e => { setSelectedId(e.target.value); setErrorMsg(null); }} disabled={submitting || loading || !enabled} aria-describedby="demo-account-help">
+              {actors.map(actor => <option key={actor.id} value={actor.id}>{actor.name} · {actor.role === 'admin' ? 'Administrator' : actor.role === 'student' ? 'Student' : 'Reviewer'}</option>)}
             </select>
-            <span className="form-hint">
-              Selected account: {selectedActor.email} • ID: {selectedActor.id}
-            </span>
+            <span id="demo-account-help" className="form-hint">{loading ? 'Checking workspace availability…' : 'Select a person to see their assigned workspace.'}</span>
           </div>
-
-          {/* Persona Card Detail */}
-          <div
-            style={{
-              padding: '16px',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-subtle)',
-              border: '1px solid var(--border-light)',
-              marginBottom: '24px',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontWeight: 700, fontSize: '15px' }}>{selectedActor.name}</span>
-              <span className={`badge badge-${selectedActor.role === 'admin' ? 'published' : selectedActor.role === 'reviewer' ? 'in_review' : 'submitted'}`}>
-                {selectedActor.role.toUpperCase()}
-              </span>
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--ink-secondary)', margin: 0 }}>
-              {selectedActor.title}
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button
-              type="submit"
-              data-testid="EL-007"
-              className="btn btn-primary"
-              disabled={submitting}
-            >
-              {submitting ? 'Starting Session...' : 'Start Signed-In Session'}
-            </button>
-          </div>
+          {selectedActor && <div className="persona-preview"><span className="avatar"><Icon name={selectedActor.role === 'admin' ? 'shield' : 'user'} size={18} /></span><div><strong>{selectedActor.name}</strong><p>{selectedActor.email}</p></div><span className="badge badge-submitted">{selectedActor.role}</span></div>}
+          <button type="submit" data-testid="EL-007" className="btn btn-primary auth-submit" disabled={submitting || loading || !enabled}>{submitting ? 'Opening your workspace…' : 'Continue to workspace'}</button>
+          <p className="auth-notice"><Icon name="shield" size={15} /><span>This is a demo account, with no password required. Your session is managed securely by the server.</span></p>
         </form>
-      </div>
-
-      {/* Overview of 5 seeded personas */}
-      <div className="card">
-        <h2 style={{ fontSize: '16px', marginBottom: '16px' }}>Available Test Personas</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {SEEDED_ACTORS.map((actor) => (
-            <div
-              key={actor.id}
-              onClick={() => setSelectedId(actor.id)}
-              style={{
-                padding: '12px 16px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid',
-                borderColor: selectedId === actor.id ? 'var(--primary)' : 'var(--border-light)',
-                background: selectedId === actor.id ? 'var(--primary-subtle)' : 'var(--bg-card)',
-                cursor: 'pointer',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                transition: 'all 0.15s ease',
-              }}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setSelectedId(actor.id);
-                }
-              }}
-              aria-label={`Select ${actor.name}`}
-            >
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '14px' }}>{actor.name}</div>
-                <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>{actor.title}</div>
-              </div>
-              <span className="badge badge-draft" style={{ textTransform: 'uppercase', fontSize: '11px' }}>
-                {actor.role}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+        <div className="persona-directory"><h2>Available demo accounts</h2>{actors.map(actor => <div className="persona-row" key={actor.id}><span className="avatar">{actor.name.replace(/^(Dr\.|Prof\.|Dean)\s*/, '').split(' ').slice(0, 2).map(part => part[0]).join('')}</span><span>{actor.name}</span><small>{actor.role === 'admin' ? 'Administrator' : actor.role === 'reviewer' ? 'Reviewer' : 'Student'}</small></div>)}</div>
+      </section>
     </div>
-  );
+  </div>;
 }

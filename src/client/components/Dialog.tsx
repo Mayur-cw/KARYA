@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useId } from 'react';
 
 interface DialogProps {
   isOpen: boolean;
@@ -17,6 +17,9 @@ export function Dialog({
   children,
   maxWidth = '560px',
 }: DialogProps) {
+  const id = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -24,6 +27,8 @@ export function Dialog({
     if (isOpen) {
       previousFocusRef.current = document.activeElement as HTMLElement;
 
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
       // Trap focus
       const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -34,7 +39,7 @@ export function Dialog({
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-          onClose();
+          closeRef.current();
         } else if (e.key === 'Tab') {
           if (!dialogRef.current) return;
           const focusables = Array.from(
@@ -64,30 +69,25 @@ export function Dialog({
       window.addEventListener('keydown', handleKeyDown);
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = previousOverflow;
         if (previousFocusRef.current) {
           previousFocusRef.current.focus();
         }
       };
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   return (
-    <div
-      className="modal-backdrop"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-    >
+    <div className="modal-backdrop">
+      <button type="button" className="modal-dismiss" tabIndex={-1} aria-label="Dismiss dialog" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="dialog-title"
-        aria-describedby={description ? 'dialog-description' : undefined}
+        aria-labelledby={`${id}-title`}
+        aria-describedby={description ? `${id}-description` : undefined}
         className="modal-panel"
         style={{ maxWidth }}
       >
@@ -100,12 +100,12 @@ export function Dialog({
           }}
         >
           <div>
-            <h2 id="dialog-title" style={{ fontSize: '20px', fontWeight: 700 }}>
+            <h2 id={`${id}-title`} style={{ fontSize: '20px', fontWeight: 700 }}>
               {title}
             </h2>
             {description && (
               <p
-                id="dialog-description"
+                id={`${id}-description`}
                 style={{ fontSize: '14px', color: 'var(--ink-muted)', marginTop: '4px' }}
               >
                 {description}

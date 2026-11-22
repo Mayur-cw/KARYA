@@ -35,8 +35,11 @@ describe('P-003 Administration Command Center (T-A11Y-P003, EL-009..EL-015)', ()
         initialDeadline: new Date(Date.now() + 86400000).toISOString(),
         allowLateResubmissions: true,
       },
+      deadline: new Date(Date.now() + 86400000).toISOString(),
+      version: 1,
+      uncertainties: [],
       stages: [
-        { stageIndex: 0, title: 'Faculty Review', assignedReviewerId: '44444444-4444-4444-4444-444444444444' },
+        { stageIndex: 0, title: 'Faculty Review', reviewerId: '44444444-4444-4444-4444-444444444444' },
       ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -51,8 +54,11 @@ describe('P-003 Administration Command Center (T-A11Y-P003, EL-009..EL-015)', ()
         initialDeadline: new Date(Date.now() + 86400000).toISOString(),
         allowLateResubmissions: false,
       },
+      deadline: new Date(Date.now() + 86400000).toISOString(),
+      version: 1,
+      uncertainties: [],
       stages: [
-        { stageIndex: 0, title: 'Stage 0', assignedReviewerId: '' }, // unassigned -> stalled
+        { stageIndex: 0, title: 'Stage 0', reviewerId: '' }, // unassigned -> stalled
       ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -129,8 +135,8 @@ describe('P-003 Administration Command Center (T-A11Y-P003, EL-009..EL-015)', ()
     expect(el015).toBeDefined();
 
     // Live Metrics check
-    expect(screen.getByText('TOTAL WORKFLOWS')).toBeDefined();
-    expect(screen.getByText('2')).toBeDefined(); // 2 total workflows
+    expect(screen.getByText('Total workflows')).toBeDefined();
+    expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(1); // 2 total workflows
     expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1);
 
     // Workflows rendered

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
+import { MetricCards } from '../components/MetricCards';
 import { StatusBadge } from '../components/StatusBadge';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { EmptyState } from '../components/EmptyState';
-import { api } from '../api';
+import { fetchCollection } from '../collections';
 
 interface ReviewQueueItem {
   id: string;
@@ -15,7 +16,7 @@ interface ReviewQueueItem {
   studentEmail?: string;
   workflowTitle?: string;
   status: 'draft' | 'submitted' | 'in_review' | 'needs_changes' | 'approved' | 'rejected';
-  currentStageIndex: number;
+  stageIndex: number;
   submittedAt?: string | null;
   createdAt: string;
 }
@@ -45,8 +46,9 @@ export default function ReviewerInbox() {
   const loadReviewQueue = useCallback(async () => {
     try {
       setErrorMsg(null);
-      const data = await api<{ items: ReviewQueueItem[] }>('/api/submissions');
-      setSubmissions(data.items || []);
+      const data = await fetchCollection<ReviewQueueItem>('/api/submissions');
+      setSubmissions(data);
+      return true;
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to load assigned review queue');
     } finally {
@@ -62,8 +64,7 @@ export default function ReviewerInbox() {
   // EL-094 Refresh assigned queue
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadReviewQueue();
-    showToast('Review queue refreshed from live records');
+    if (await loadReviewQueue()) showToast('Review queue refreshed from live records');
   };
 
   // EL-093 Logout
@@ -105,7 +106,7 @@ export default function ReviewerInbox() {
   const resolvedCount = submissions.filter((s) => s.status === 'approved' || s.status === 'rejected').length;
 
   return (
-    <div className="reviewer-inbox-page" data-testid="page-p-012" style={{ maxWidth: '1050px', margin: '0 auto' }}>
+    <div className="reviewer-inbox-page" data-testid="page-p-012" >
       {/* Top Header */}
       <div
         className="card-header"
@@ -166,40 +167,12 @@ export default function ReviewerInbox() {
         />
       )}
 
-      {/* Overview Metric Counters */}
-      <section style={{ marginBottom: '24px' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px',
-          }}
-        >
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600 }}>PENDING EVALUATION</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--primary)', marginTop: '2px' }}>
-              {loading ? '-' : pendingCount}
-            </div>
-            <span style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Awaiting your decision</span>
-          </div>
-
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>CORRECTION LOOPS</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--warning)', marginTop: '2px' }}>
-              {loading ? '-' : needsChangesCount}
-            </div>
-            <span style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Pending student resubmission</span>
-          </div>
-
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 600 }}>DECISIONS RECORDED</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--success)', marginTop: '2px' }}>
-              {loading ? '-' : resolvedCount}
-            </div>
-            <span style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Approved or resolved</span>
-          </div>
-        </div>
-      </section>
+      <MetricCards loading={loading} error={!!errorMsg} items={[
+        { title: 'Assigned to you', value: submissions.length, description: 'Applications in your queue', icon: 'inbox' },
+        { title: 'Awaiting review', value: pendingCount, description: 'Ready for your decision', icon: 'clock', featured: true },
+        { title: 'Changes requested', value: needsChangesCount, description: 'Waiting for student updates', icon: 'file' },
+        { title: 'Decisions recorded', value: resolvedCount, description: 'Approved or rejected', icon: 'check' },
+      ]} />
 
       {/* Filter and Search Bar (EL-087, EL-088, EL-094) */}
       <div
@@ -297,7 +270,7 @@ export default function ReviewerInbox() {
                   <th scope="col">Workflow Title</th>
                   <th scope="col">Stage</th>
                   <th scope="col">Status</th>
-                  <th scope="col">Submitted Date</th>
+                  <th scope="col">Application date</th>
                   <th scope="col" style={{ textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
@@ -314,13 +287,13 @@ export default function ReviewerInbox() {
                       <div style={{ fontWeight: 500 }}>{sub.workflowTitle || 'Internship Application'}</div>
                     </td>
                     <td>
-                      <span className="badge badge-draft">Stage {sub.currentStageIndex}</span>
+                      <span className="badge badge-draft">Stage {sub.stageIndex}</span>
                     </td>
                     <td>
                       <StatusBadge status={sub.status} />
                     </td>
                     <td style={{ fontSize: '13px' }}>
-                      {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : 'Draft'}
+                      {new Date(sub.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <Link
@@ -329,7 +302,7 @@ export default function ReviewerInbox() {
                         className="btn btn-primary btn-sm"
                         aria-label={`Open review for ${sub.studentName || 'applicant'}`}
                       >
-                        Evaluate →
+                        Evaluate
                       </Link>
                     </td>
                   </tr>
@@ -363,7 +336,7 @@ export default function ReviewerInbox() {
                 disabled={!hasPrevPage}
                 aria-label="Previous review page"
               >
-                ← Previous
+                Previous
               </button>
 
               <span style={{ fontSize: '13px', fontWeight: 600, padding: '0 8px' }}>
@@ -378,7 +351,7 @@ export default function ReviewerInbox() {
                 disabled={!hasNextPage}
                 aria-label="Next review page"
               >
-                Next →
+                Next
               </button>
             </div>
           </div>

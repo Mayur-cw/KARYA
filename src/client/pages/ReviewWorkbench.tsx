@@ -31,7 +31,7 @@ interface WorkflowDetail {
   title: string;
   description?: string;
   deadline: string;
-  schema: {
+  schema?: {
     fields: Array<{
       id: string;
       label: string;
@@ -40,8 +40,9 @@ interface WorkflowDetail {
       description?: string;
     }>;
   };
+  fields?: Array<{ key: string; label: string; type: string; required: boolean }>;
   stages: Array<{
-    name: string;
+    label: string;
     reviewerId: string;
     reviewerName?: string;
   }>;
@@ -146,7 +147,7 @@ export default function ReviewWorkbench() {
   };
 
   // EL-095 Read attached evidence
-  const handleDownloadAttachment = (attId: string, _fileName: string) => {
+  const handleDownloadAttachment = (attId: string) => {
     window.open(`/api/attachments/${attId}`, '_blank');
     showToast('Evidence file securely requested');
   };
@@ -222,7 +223,7 @@ export default function ReviewWorkbench() {
         />
         <div style={{ marginTop: '16px' }}>
           <Link to="/reviewer" data-testid="EL-101" className="btn btn-secondary">
-            ← Return to Review Inbox
+            Return to Review Inbox
           </Link>
         </div>
       </div>
@@ -234,7 +235,7 @@ export default function ReviewWorkbench() {
   const isAssignedReviewer = submission.currentReviewerId === user?.id;
   const isPendingReview = submission.status === 'submitted' || submission.status === 'in_review';
   const canDecide = isAssignedReviewer && isPendingReview;
-  const stageName = workflow?.stages?.[submission.stageIndex]?.name || `Stage ${submission.stageIndex}`;
+  const stageName = workflow?.stages?.[submission.stageIndex]?.label || `Stage ${submission.stageIndex}`;
 
   return (
     <div className="review-workbench-page" data-testid="page-p-013" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -253,7 +254,7 @@ export default function ReviewWorkbench() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
             <Link to="/reviewer" data-testid="EL-101" className="btn btn-secondary btn-sm" aria-label="Return to review inbox">
-              ← Reviewer Inbox
+              Reviewer Inbox
             </Link>
             <span className="badge badge-in_review">Stage {submission.stageIndex}: {stageName}</span>
             <StatusBadge status={submission.status} />
@@ -331,7 +332,7 @@ export default function ReviewWorkbench() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
           gap: '24px',
           alignItems: 'start',
         }}
@@ -343,13 +344,13 @@ export default function ReviewWorkbench() {
             <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
               Applicant Responses
             </h2>
-            {workflow?.schema?.fields && workflow.schema.fields.length > 0 ? (
+            {(workflow?.fields || workflow?.schema?.fields) && (workflow.fields || workflow.schema?.fields || []).length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {workflow.schema.fields.map((field) => {
-                  const val = submission.answers[field.id];
+                {(workflow.fields || workflow.schema?.fields || []).map((field) => {
+                  const val = submission.answers['key' in field ? field.key : field.id];
                   return (
                     <div
-                      key={field.id}
+                      key={'key' in field ? field.key : field.id}
                       style={{
                         padding: '12px 16px',
                         backgroundColor: 'var(--bg-subtle)',
@@ -362,7 +363,7 @@ export default function ReviewWorkbench() {
                       </div>
                       <div style={{ fontSize: '15px', color: 'var(--ink-primary)', whiteSpace: 'pre-wrap' }}>
                         {val !== undefined && val !== null && String(val).trim() !== ''
-                          ? String(val)
+                          ? field.type === 'file' ? (submission.attachments?.find(attachment => attachment.id === val)?.displayName || 'Attached document') : String(val)
                           : <em style={{ color: 'var(--ink-muted)' }}>Not provided</em>}
                       </div>
                     </div>
@@ -422,7 +423,7 @@ export default function ReviewWorkbench() {
                       type="button"
                       data-testid="EL-095"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => handleDownloadAttachment(att.id, att.displayName)}
+                      onClick={() => handleDownloadAttachment(att.id)}
                       aria-label={`Read attached evidence ${att.displayName}`}
                     >
                       Inspect / Stream ↗
@@ -485,7 +486,7 @@ export default function ReviewWorkbench() {
                   ✓ Approve Stage {submission.stageIndex}
                 </button>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '10px' }}>
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -680,7 +681,7 @@ export default function ReviewWorkbench() {
             <ol style={{ paddingLeft: '20px', fontSize: '13px' }}>
               {workflow.stages.map((stg, i) => (
                 <li key={i} style={{ marginBottom: '6px' }}>
-                  <strong>{stg.name}</strong> — Assigned Evaluator: {stg.reviewerName || stg.reviewerId}
+                  <strong>{stg.label}</strong> — Assigned Evaluator: {stg.reviewerName || stg.reviewerId}
                 </li>
               ))}
             </ol>
@@ -691,10 +692,10 @@ export default function ReviewWorkbench() {
           <h3 style={{ fontSize: '14px', fontWeight: 700, marginTop: '16px', marginBottom: '8px' }}>
             Form Fields Required
           </h3>
-          {workflow?.schema?.fields && (
+          {(workflow?.fields || workflow?.schema?.fields) && (
             <ul style={{ paddingLeft: '20px', fontSize: '13px' }}>
-              {workflow.schema.fields.map((fld) => (
-                <li key={fld.id} style={{ marginBottom: '4px' }}>
+              {(workflow.fields || workflow.schema?.fields || []).map((fld) => (
+                <li key={'key' in fld ? fld.key : fld.id} style={{ marginBottom: '4px' }}>
                   <strong>{fld.label}</strong> ({fld.type}) {fld.required && '— Required'}
                 </li>
               ))}

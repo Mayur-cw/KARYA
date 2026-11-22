@@ -5,12 +5,13 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Dialog } from '../components/Dialog';
 import { api } from '../api';
+import { fetchCollection } from '../collections';
 
 interface DynamicField {
-  id: string;
-  name: string;
+  id?: string;
+  key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'select' | 'date' | 'file';
+  type: 'text' | 'select' | 'date' | 'file';
   required: boolean;
   options?: string[];
   placeholder?: string;
@@ -18,14 +19,14 @@ interface DynamicField {
 
 interface ReviewStage {
   stageIndex: number;
-  name: string;
+  label: string;
   reviewerId: string;
 }
 
 interface UncertaintyItem {
   id: string;
-  field: string;
-  reason: string;
+  kind: string;
+  description: string;
   sourceSpan?: [number, number];
   resolved: boolean;
   resolutionNote?: string;
@@ -60,6 +61,11 @@ interface UserOption {
   role: string;
 }
 
+function toLocalInput(value: string) {
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 export default function WorkflowEditor() {
   const { workflowId } = useParams<{ workflowId: string }>();
   const navigate = useNavigate();
@@ -87,7 +93,7 @@ export default function WorkflowEditor() {
   const [fieldModalOpen, setFieldModalOpen] = useState(false);
   const [tempField, setTempField] = useState<DynamicField>({
     id: '',
-    name: '',
+    key: '',
     label: '',
     type: 'text',
     required: true,
@@ -104,14 +110,14 @@ export default function WorkflowEditor() {
 
       const [wfData, usersData] = await Promise.all([
         api<WorkflowData>(`/api/workflows/${workflowId}`),
-        api<UserOption[]>('/api/users').catch(() => []),
+        fetchCollection<UserOption>('/api/users'),
       ]);
 
       setWorkflow(wfData);
       setUsers(usersData || []);
 
       setTitle(wfData.title || '');
-      setDeadline(wfData.deadline ? wfData.deadline.slice(0, 16) : '');
+      setDeadline(wfData.deadline ? toLocalInput(wfData.deadline) : '');
       setFields(wfData.fields || []);
 
       // Ensure at least 2 stages exist
@@ -119,8 +125,8 @@ export default function WorkflowEditor() {
         setStages(wfData.stages);
       } else {
         setStages([
-          { stageIndex: 0, name: 'Faculty Mentor Review', reviewerId: wfData.stages?.[0]?.reviewerId || '' },
-          { stageIndex: 1, name: 'Dean / Final Sanction', reviewerId: wfData.stages?.[1]?.reviewerId || '' },
+          { stageIndex: 0, label: 'Faculty Mentor Review', reviewerId: wfData.stages?.[0]?.reviewerId || '' },
+          { stageIndex: 1, label: 'Dean / Final Sanction', reviewerId: wfData.stages?.[1]?.reviewerId || '' },
         ]);
       }
 
@@ -155,10 +161,11 @@ export default function WorkflowEditor() {
     try {
       const updated = await api<WorkflowData>(`/api/workflows/${workflowId}/propose`, {
         method: 'POST',
+        body: JSON.stringify({ expectedVersion: workflow?.version }),
       });
       setWorkflow(updated);
       setFields(updated.fields || []);
-      if (updated.deadline) setDeadline(updated.deadline.slice(0, 16));
+      if (updated.deadline) setDeadline(toLocalInput(updated.deadline));
       if (updated.stages && updated.stages.length > 0) setStages(updated.stages);
       setUncertainties(updated.uncertainties || []);
       showToast('Proposal synthesized from source document');
@@ -174,16 +181,14 @@ export default function WorkflowEditor() {
     if (fields.length === 0) {
       setFields([
         {
-          id: 'field-' + crypto.randomUUID().slice(0, 8),
-          name: 'project_title',
+          key: 'project_title',
           label: 'Internship Project Title',
           type: 'text',
           required: true,
           placeholder: 'Enter official project or research title',
         },
         {
-          id: 'field-' + crypto.randomUUID().slice(0, 8),
-          name: 'offer_letter',
+          key: 'offer_letter',
           label: 'Upload Signed Offer Letter (PDF)',
           type: 'file',
           required: true,
@@ -197,8 +202,7 @@ export default function WorkflowEditor() {
   const handleOpenAddField = () => {
     setEditingFieldIndex(null);
     setTempField({
-      id: 'field-' + crypto.randomUUID().slice(0, 8),
-      name: '',
+      key: '',
       label: '',
       type: 'text',
       required: true,
@@ -215,9 +219,14 @@ export default function WorkflowEditor() {
 
   const handleSaveField = () => {
     if (!tempField.label.trim()) return;
+    const key = tempField.key.trim() || tempField.label.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 50);
+    if (!/^[a-zA-Z0-9_]{1,50}$/.test(key) || fields.some((field, index) => index !== editingFieldIndex && field.key === key)) {
+      setErrorMsg('Use a unique field key with letters, numbers, and underscores (up to 50 characters).');
+      return;
+    }
     const finalField: DynamicField = {
       ...tempField,
-      name: tempField.name.trim() || tempField.label.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+      key,
     };
 
     if (editingFieldIndex !== null) {
@@ -375,7 +384,7 @@ export default function WorkflowEditor() {
           data-testid="EL-044"
           className="btn btn-secondary btn-sm"
         >
-          ← Back to Workflow Overview
+          Back to Workflow Overview
         </Link>
       </div>
 
@@ -397,9 +406,9 @@ export default function WorkflowEditor() {
             <StatusBadge status={workflow.status} />
             <span style={{ fontSize: '13px', color: 'var(--ink-muted)' }}>v{workflow.version}</span>
           </div>
-          <h1>Explainable Workflow Editor</h1>
+          <h1>Workflow editor</h1>
           <p className="card-subtitle">
-            Configure dynamic submission forms, human review stages, and resolve uncertainties before publishing.
+            Define the application, choose reviewers, and confirm requirements before publishing.
           </p>
         </div>
 
@@ -458,7 +467,7 @@ export default function WorkflowEditor() {
       >
         <div>
           <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--primary)' }}>
-            AI Grounding & Proposal Synthesis
+            Build your workflow
           </div>
           <div style={{ fontSize: '13px', color: 'var(--ink-secondary)' }}>
             {workflow.origin === 'ai'
@@ -467,7 +476,7 @@ export default function WorkflowEditor() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             type="button"
             data-testid="EL-030"
@@ -475,7 +484,7 @@ export default function WorkflowEditor() {
             onClick={handleProposeAI}
             disabled={proposing || saving}
           >
-            {proposing ? 'Synthesizing...' : '⚡ Generate Evidence-Linked Proposal'}
+            {proposing ? 'Synthesizing...' : 'Generate proposal'}
           </button>
           <button
             type="button"
@@ -483,13 +492,13 @@ export default function WorkflowEditor() {
             className="btn btn-secondary btn-sm"
             onClick={handleChooseManual}
           >
-            Manual Proposal Mode
+            Build manually
           </button>
         </div>
       </div>
 
       {/* Main Grid: 2 Columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '24px' }}>
         {/* Left Column: Title, Deadline, Stages, Audience */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Workflow Title (EL-032) */}
@@ -551,7 +560,7 @@ export default function WorkflowEditor() {
                   value={stages[0]?.reviewerId || ''}
                   onChange={(e) => {
                     const newStages = [...stages];
-                    if (!newStages[0]) newStages[0] = { stageIndex: 0, name: 'Faculty Mentor Review', reviewerId: '' };
+                    if (!newStages[0]) newStages[0] = { stageIndex: 0, label: 'Faculty Mentor Review', reviewerId: '' };
                     newStages[0].reviewerId = e.target.value;
                     setStages(newStages);
                   }}
@@ -578,7 +587,7 @@ export default function WorkflowEditor() {
                   value={stages[1]?.reviewerId || ''}
                   onChange={(e) => {
                     const newStages = [...stages];
-                    if (!newStages[1]) newStages[1] = { stageIndex: 1, name: 'Final Authority Approval', reviewerId: '' };
+                    if (!newStages[1]) newStages[1] = { stageIndex: 1, label: 'Final Authority Approval', reviewerId: '' };
                     newStages[1].reviewerId = e.target.value;
                     setStages(newStages);
                   }}
@@ -597,7 +606,7 @@ export default function WorkflowEditor() {
 
           {/* Student Audience Selection (EL-040) */}
           <div className="card">
-            <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Eligible Student Cohort</h2>
+            <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Student recipients</h2>
             <p style={{ fontSize: '13px', color: 'var(--ink-secondary)', marginBottom: '12px' }}>
               Assign eligible students who will receive this workflow in their Process Hub.
             </p>
@@ -661,7 +670,7 @@ export default function WorkflowEditor() {
           {/* Source Document Evidence */}
           {workflow.sourceDocument && (
             <div className="card">
-              <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Ingested Circular Source</h2>
+              <h2 style={{ fontSize: '16px', marginBottom: '8px' }}>Source instruction</h2>
               <div
                 style={{
                   maxHeight: '160px',
@@ -683,7 +692,7 @@ export default function WorkflowEditor() {
           <div className="card">
             <div className="card-header" style={{ marginBottom: '12px' }}>
               <div>
-                <h2 style={{ fontSize: '16px' }}>Identified Ambiguities & Uncertainties</h2>
+                <h2 style={{ fontSize: '16px' }}>Questions to resolve</h2>
                 <p className="card-subtitle">All uncertainties must be resolved before publication.</p>
               </div>
               <span className={`badge ${unresolvedUncertainties.length > 0 ? 'badge-rejected' : 'badge-published'}`}>
@@ -714,7 +723,7 @@ export default function WorkflowEditor() {
                   >
                     <div>
                       <div style={{ fontWeight: 600, fontSize: '13px' }}>
-                        {u.field}: {u.reason}
+                        {u.kind}: {u.description}
                       </div>
                       {u.resolved && (
                         <div style={{ fontSize: '12px', color: 'var(--success)', marginTop: '2px' }}>
@@ -743,7 +752,7 @@ export default function WorkflowEditor() {
           <div className="card">
             <div className="card-header" style={{ marginBottom: '14px' }}>
               <div>
-                <h2 style={{ fontSize: '16px' }}>Applicant Form Schema</h2>
+                <h2 style={{ fontSize: '16px' }}>Application fields</h2>
                 <p className="card-subtitle">Required fields for student submission.</p>
               </div>
               <button
@@ -764,7 +773,7 @@ export default function WorkflowEditor() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {fields.map((f, idx) => (
                   <div
-                    key={f.id}
+                    key={f.key}
                     style={{
                       padding: '10px 14px',
                       borderRadius: 'var(--radius-sm)',
@@ -780,7 +789,7 @@ export default function WorkflowEditor() {
                         {f.label} {f.required && <span style={{ color: 'var(--danger)' }}>*</span>}
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
-                        Type: {f.type} • Key: {f.name}
+                        Type: {f.type} • Key: {f.key}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
@@ -824,10 +833,10 @@ export default function WorkflowEditor() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h2 style={{ fontSize: '18px', color: canPublish ? 'var(--success)' : 'var(--ink-primary)' }}>
-              Publication Integrity Gate
+              Ready to publish?
             </h2>
             <p style={{ fontSize: '13px', color: 'var(--ink-secondary)', marginTop: '4px' }}>
-              Enforces non-negotiable hackathon integrity: missing deadlines, unassigned reviewers, or active uncertainties block release.
+              Complete these requirements before making this workflow available to students.
             </p>
 
             <ul style={{ listStyle: 'none', padding: 0, marginTop: '10px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -864,7 +873,7 @@ export default function WorkflowEditor() {
               disabled={!canPublish || publishing || saving}
               style={{ minHeight: '48px', padding: '0 24px', fontSize: '15px' }}
             >
-              {publishing ? 'Publishing Workflow...' : '🚀 Publish Approved Workflow'}
+              {publishing ? 'Publishing Workflow...' : 'Publish workflow'}
             </button>
           </div>
         </div>
@@ -905,9 +914,7 @@ export default function WorkflowEditor() {
               }
             >
               <option value="text">Text (Single Line)</option>
-              <option value="textarea">Textarea (Multi-line)</option>
-              <option value="number">Numeric</option>
-              <option value="date">Date</option>
+                      <option value="date">Date</option>
               <option value="file">File Attachment (PDF / Image ≤ 5 MiB)</option>
             </select>
           </div>
@@ -997,13 +1004,11 @@ export default function WorkflowEditor() {
           </div>
 
           {fields.map((f) => (
-            <div key={f.id} className="form-group" style={{ marginBottom: 0 }}>
+            <div key={f.key} className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">
                 {f.label} {f.required && <span style={{ color: 'var(--danger)' }}>*</span>}
               </label>
-              {f.type === 'textarea' ? (
-                <textarea className="form-textarea" placeholder={f.placeholder} disabled rows={3} />
-              ) : f.type === 'file' ? (
+              {f.type === 'file' ? (
                 <input type="file" className="form-input" disabled />
               ) : (
                 <input type={f.type} className="form-input" placeholder={f.placeholder} disabled />

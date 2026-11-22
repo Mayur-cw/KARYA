@@ -92,7 +92,7 @@ describe('P-009 Student Process Hub Page and Elements (T-A11Y-P009, EL-059..EL-0
     // Heading
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
-    expect(headings[0].textContent).toContain('Student Process Hub');
+    expect(headings[0].textContent).toContain('My process hub');
 
     // EL-062 My notifications
     const el062 = screen.getByTestId('EL-062');

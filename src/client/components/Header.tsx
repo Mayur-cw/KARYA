@@ -1,186 +1,40 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth, SEEDED_ACTORS } from './AuthContext';
-
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from './AuthContext';
+import { BrandMark, Icon, type IconName } from './Icon';
+const navigation: Record<string, { to: string; label: string; icon: IconName; end?: boolean }[]> = {
+  admin: [
+    { to: '/admin', label: 'Overview', icon: 'grid', end: true },
+    { to: '/admin/workflows', label: 'Workflows', icon: 'layers' },
+    { to: '/admin/studio', label: 'Intake studio', icon: 'sparkle' },
+    { to: '/admin/audit', label: 'Audit trail', icon: 'log' },
+  ],
+  student: [{ to: '/student', label: 'My processes', icon: 'grid' }],
+  reviewer: [{ to: '/reviewer', label: 'Review inbox', icon: 'inbox' }],
+};
 export function Header() {
-  const { user, role, unreadCount, login, logout } = useAuth();
+  const { user, role, unreadCount } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
-
-  const handleActorSwitch = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    if (val === 'logout') {
-      await logout();
-      navigate('/login');
-    } else if (val) {
-      await login(val);
-      // Route to the appropriate role home
-      const selected = SEEDED_ACTORS.find((a) => a.id === val);
-      if (selected) {
-        if (selected.role === 'admin') navigate('/admin');
-        else if (selected.role === 'student') navigate('/student');
-        else if (selected.role === 'reviewer') navigate('/reviewer');
-      }
-    }
-  };
-
-  return (
-    <header className="app-header" role="banner">
-      <div className="header-container">
-        <div className="brand-section">
-          <Link to="/" className="brand-logo" aria-label="KARYA Home">
-            <span>KARYA</span>
-            <span className="badge">Gov Ops</span>
-          </Link>
-
-          {role !== 'anonymous' && (
-            <nav aria-label="Role Navigation">
-              <ul className="nav-links">
-                {role === 'admin' && (
-                  <>
-                    <li>
-                      <Link
-                        to="/admin"
-                        className={location.pathname === '/admin' ? 'active' : ''}
-                      >
-                        Command Center
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="/admin/workflows"
-                        className={location.pathname === '/admin/workflows' ? 'active' : ''}
-                      >
-                        Workflows
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="/admin/studio"
-                        className={location.pathname === '/admin/studio' ? 'active' : ''}
-                      >
-                        Studio Intake
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        to="/admin/audit"
-                        className={location.pathname === '/admin/audit' ? 'active' : ''}
-                      >
-                        Audit
-                      </Link>
-                    </li>
-                  </>
-                )}
-
-                {role === 'student' && (
-                  <li>
-                    <Link
-                      to="/student"
-                      className={location.pathname === '/student' ? 'active' : ''}
-                    >
-                      Process Hub
-                    </Link>
-                  </li>
-                )}
-
-                {role === 'reviewer' && (
-                  <li>
-                    <Link
-                      to="/reviewer"
-                      className={location.pathname === '/reviewer' ? 'active' : ''}
-                    >
-                      Reviewer Inbox
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            </nav>
-          )}
-        </div>
-
-        <div className="header-actions">
-          {/* Quick Persona Switcher for Hackathon Judges & Evaluators */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label
-              htmlFor="demo-actor-select"
-              style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)' }}
-            >
-              Persona:
-            </label>
-            <select
-              id="demo-actor-select"
-              className="form-select"
-              aria-label="Switch active persona"
-              value={user?.id || ''}
-              onChange={handleActorSwitch}
-              style={{
-                height: '36px',
-                minHeight: '36px',
-                padding: '4px 8px',
-                fontSize: '13px',
-                maxWidth: '200px',
-              }}
-            >
-              <option value="" disabled>
-                -- Select Demo Actor --
-              </option>
-              {SEEDED_ACTORS.map((actor) => (
-                <option key={actor.id} value={actor.id}>
-                  {actor.name} ({actor.role})
-                </option>
-              ))}
-              {user && <option value="logout">Sign out</option>}
-            </select>
-          </div>
-
-          {user ? (
-            <>
-              <Link
-                to="/notifications"
-                className="btn btn-secondary btn-sm"
-                aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
-                style={{ position: 'relative' }}
-              >
-                <span>🔔</span>
-                {unreadCount > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '-4px',
-                      right: '-4px',
-                      background: 'var(--danger)',
-                      color: 'white',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      borderRadius: 'var(--radius-full)',
-                      padding: '1px 6px',
-                      lineHeight: '1',
-                    }}
-                  >
-                    {unreadCount}
-                  </span>
-                )}
-              </Link>
-
-              <Link
-                to="/account"
-                className="btn btn-secondary btn-sm"
-                aria-label="Account Settings"
-              >
-                <span>👤</span>
-                <span style={{ maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {user.name.split(' ')[0]}
-                </span>
-              </Link>
-            </>
-          ) : (
-            <Link to="/login" className="btn btn-primary btn-sm">
-              Sign In
-            </Link>
-          )}
-        </div>
-      </div>
-    </header>
-  );
+  const current = navigation[role]?.find(item => item.end ? location.pathname === item.to : location.pathname.startsWith(item.to));
+  const pageName = location.pathname === '/account' ? 'My account' : location.pathname === '/notifications' ? 'Notifications' : current?.label || 'Workspace';
+  const initials = user?.name.replace(/\([^)]*\)/g, '').replace(/^(Dr\.|Prof\.|Dean)\s*/, '').trim().split(/\s+/).slice(0, 2).map(n => n[0]).join('');
+  if (!user) return <header className="public-header">
+    <Link to="/" className="brand-logo" aria-label="KARYA Institutional workspace home"><BrandMark /><span>KARYA<span className="brand-caption">Institutional workspace</span></span></Link>
+    <div className="public-header-actions"><span>Less paperwork. More progress.</span><Link to="/login" className="btn btn-primary btn-sm">Sign in</Link></div>
+  </header>;
+  return <>
+    <aside className="workspace-sidebar" aria-label="Workspace sidebar">
+      <Link to={`/${role}`} className="brand-logo" aria-label="KARYA Institutional workspace home"><BrandMark /><span>KARYA<span className="brand-caption">Institutional workspace</span></span></Link>
+      <div className="workspace-label"><span className="workspace-monogram"><Icon name="shield" size={18} /></span><span>{role === 'admin' ? 'Administration' : role === 'student' ? 'Student workspace' : 'Faculty workspace'}<small>KARYA · Operations</small></span></div>
+      <nav aria-label="Role Navigation" className="sidebar-nav">
+        <p className="nav-caption">WORKSPACE</p>
+        {navigation[role]?.map(item => <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}><Icon name={item.icon} /><span>{item.label}</span></NavLink>)}
+        <p className="nav-caption secondary-caption">PERSONAL</p>
+        <NavLink to="/notifications" className="sidebar-link"><Icon name="bell" /><span>Notifications</span>{unreadCount > 0 && <span className="nav-count">{unreadCount}</span>}</NavLink>
+        <NavLink to="/account" className="sidebar-link"><Icon name="user" /><span>My account</span></NavLink>
+      </nav>
+      <div className="sidebar-bottom"><div className="sidebar-note"><Icon name="shield" /><strong>Every step, accounted for.</strong><p>Clear ownership. Human decisions. A traceable process.</p></div><Link to="/account" className="sidebar-profile"><span className="avatar">{initials}</span><span><strong>{user.name.replace(/\s*\([^)]*\)/g, '')}</strong><small>{role === 'admin' ? 'Administrator' : role === 'student' ? 'Student' : 'Reviewer'}</small></span><Icon name="chevron" size={16} /></Link></div>
+    </aside>
+    <header className="workspace-topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>{pageName}</strong></div><div className="topbar-actions"><span className="today-label">{new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</span><Link to="/notifications" className="icon-button" aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}><Icon name="bell" />{unreadCount > 0 && <span className="notification-count">{unreadCount}</span>}</Link><Link to="/account" className="avatar avatar-small" aria-label={`${initials} Account settings`}>{initials}</Link></div></header>
+  </>;
 }

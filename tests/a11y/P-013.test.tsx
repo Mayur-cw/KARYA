@@ -186,7 +186,7 @@ describe('P-013 Review Workbench Page and Elements (T-A11Y-P013, EL-095..EL-106)
   });
 
   it('handles stage approval decision (EL-099, EL-104, EL-100)', async () => {
-    vi.mocked(apiModule.api).mockImplementation((path: string, options?: any) => {
+    vi.mocked(apiModule.api).mockImplementation((path: string, options?: RequestInit) => {
       if (path === '/api/submissions/sub-rev-101' && (!options || options.method === 'GET')) {
         return Promise.resolve(mockSubmission);
       }

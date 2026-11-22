@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, UserProfile } from '../components/AuthContext';
-import { StatusBadge } from '../components/StatusBadge';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { api } from '../api';
 
@@ -111,19 +110,19 @@ export default function MyAccount() {
         <div>
           {user?.role === 'admin' && (
             <Link to="/admin" data-testid="EL-121" className="btn btn-secondary btn-sm">
-              ← Return to Admin Home
+              Return to Admin Home
             </Link>
           )}
 
           {user?.role === 'student' && (
             <Link to="/student" data-testid="EL-122" className="btn btn-secondary btn-sm">
-              ← Return to Student Home
+              Return to Student Home
             </Link>
           )}
 
           {user?.role === 'reviewer' && (
             <Link to="/reviewer" data-testid="EL-123" className="btn btn-secondary btn-sm">
-              ← Return to Reviewer Home
+              Return to Reviewer Home
             </Link>
           )}
         </div>
@@ -172,7 +171,7 @@ export default function MyAccount() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '16px' }}>
               <div>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--ink-muted)' }}>Email Address</span>
                 <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink-primary)', marginTop: '2px' }}>

@@ -22,14 +22,14 @@ describe('P-006 Explainable Workflow Editor and Elements (T-A11Y-P006, EL-030..E
     origin: 'ai',
     deadline: new Date(Date.now() + 86400000).toISOString(),
     fields: [
-      { id: 'f-1', name: 'project_title', label: 'Project Title', type: 'text', required: true },
+      { key: 'project_title', label: 'Project Title', type: 'text', required: true },
     ],
     stages: [
-      { stageIndex: 0, name: 'Faculty Review', reviewerId: '44444444-4444-4444-4444-444444444444' },
-      { stageIndex: 1, name: 'Dean Sanction', reviewerId: '55555555-5555-5555-5555-555555555555' },
+      { stageIndex: 0, label: 'Faculty Review', reviewerId: '44444444-4444-4444-4444-444444444444' },
+      { stageIndex: 1, label: 'Dean Sanction', reviewerId: '55555555-5555-5555-5555-555555555555' },
     ],
     uncertainties: [
-      { id: 'unc-1', field: 'deadline', reason: 'Unspecified submission time', resolved: false },
+      { id: 'unc-1', kind: 'deadline', description: 'Unspecified submission time', resolved: false },
     ],
     sourceDocument: {
       id: 'src-123',
@@ -72,7 +72,7 @@ describe('P-006 Explainable Workflow Editor and Elements (T-A11Y-P006, EL-030..E
     // Heading
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
-    expect(headings[0].textContent).toContain('Explainable Workflow Editor');
+    expect(headings[0].textContent).toContain('Workflow editor');
 
     // EL-044 Back link
     const el044 = screen.getByTestId('EL-044');
@@ -185,4 +185,55 @@ describe('P-006 Explainable Workflow Editor and Elements (T-A11Y-P006, EL-030..E
       })
     );
   });
+  async function mountEditor() {
+    await act(async () => { render(<MemoryRouter initialEntries={['/admin/workflows/wf-editor-123/edit']}><Routes><Route path="/admin/workflows/:workflowId/edit" element={<WorkflowEditor />} /></Routes></MemoryRouter>); });
+  }
+  it('adds, edits and removes fields using canonical keys and supported types', async () => {
+    await mountEditor();
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-034')); });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Field Label *'), { target: { value: 'Start date' } });
+      fireEvent.change(screen.getByLabelText('Field Type'), { target: { value: 'date' } });
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Mandatory (Applicant must complete)' }));
+    });
+    await act(async () => { fireEvent.click(screen.getByText('Save Field')); });
+    expect(screen.getByText('Start date')).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getAllByTestId('EL-035')[1]); });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Field Label *'), { target: { value: 'Internship start date' } }); });
+    await act(async () => { fireEvent.click(screen.getByText('Save Field')); });
+    expect(screen.getByText('Internship start date')).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getAllByTestId('EL-037')[1]); });
+    expect(screen.queryByText('Internship start date')).toBeNull();
+  });
+  it('retains local input when a draft save fails, and sends the current version', async () => {
+    await mountEditor();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('EL-032'), { target: { value: 'Updated internship process' } });
+      fireEvent.change(screen.getByTestId('EL-033'), { target: { value: '2026-12-20T17:00' } });
+      fireEvent.change(screen.getByTestId('EL-038'), { target: { value: mockUsers[0].id } });
+      fireEvent.change(screen.getByTestId('EL-039'), { target: { value: mockUsers[1].id } });
+      fireEvent.click(screen.getByTestId('EL-040').querySelector('input')!);
+    });
+    vi.mocked(apiModule.api).mockRejectedValueOnce(new Error('Version conflict: refresh before saving'));
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-042')); });
+    expect((screen.getByTestId('EL-032') as HTMLInputElement).value).toBe('Updated internship process');
+    expect(screen.getByText('Version conflict: refresh before saving')).toBeDefined();
+    const call = vi.mocked(apiModule.api).mock.calls.find(([, options]) => options?.method === 'PATCH');
+    const payload = JSON.parse(String(call?.[1]?.body));
+    expect(payload.expectedVersion).toBe(1);
+    expect(payload.fields[0].key).toBe('project_title');
+    expect(payload.stages[0].label).toBe('Faculty Review');
+  });
+  it('regenerates a proposal with the current version and shows a form preview', async () => {
+    await mountEditor();
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-030')); });
+    expect(apiModule.api).toHaveBeenCalledWith('/api/workflows/wf-editor-123/propose', { method: 'POST', body: JSON.stringify({ expectedVersion: 1 }) });
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-043')); });
+    expect(screen.getByRole('dialog')).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getByText('Close Preview')); });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByTestId('EL-031')); });
+    expect(screen.getByText(/Switched to manual workflow configuration mode/)).toBeDefined();
+  });
+
 });

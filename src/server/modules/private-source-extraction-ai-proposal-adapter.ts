@@ -415,6 +415,9 @@ export async function handlePostDocument(req: Request, res: Response): Promise<v
     rawBuffer = Buffer.from(content, 'utf8');
   } else if (Buffer.isBuffer(req.body)) {
     rawBuffer = req.body;
+    if (typeof req.headers['x-document-title'] === 'string') {
+      try { title = decodeURIComponent(req.headers['x-document-title']).slice(0, 200); } catch { title = 'Uploaded document'; }
+    }
     declaredMime = req.headers['content-type'] || 'text/plain';
   } else {
     // If multipart or text was passed as string

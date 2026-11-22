@@ -6,8 +6,11 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { EmptyState } from '../components/EmptyState';
 import { Dialog } from '../components/Dialog';
 import { api } from '../api';
+import { fetchCollection } from '../collections';
+import type { AssignmentPublic, SubmissionPublic, WorkflowAnalytics } from '../../shared/contracts';
 
 interface ParticipantRecord {
+  assignmentId: string;
   studentId: string;
   studentName: string;
   studentEmail: string;
@@ -70,17 +73,20 @@ export default function ProcessMonitor() {
     try {
       setErrorMsg(null);
 
-      const [wf, assigneesData, metricsData, usersData] = await Promise.all([
-        api<{ title: string }>(`/api/workflows/${workflowId}`).catch(() => ({ title: 'Workflow Process' })),
-        api<ParticipantRecord[]>(`/api/workflows/${workflowId}/assignees`).catch(() => []),
-        api<WorkflowMetrics>(`/api/workflows/${workflowId}/metrics`).catch(() => null),
-        api<UserOption[]>('/api/users').catch(() => []),
+      const [wf, assignments, analytics, users, submissions] = await Promise.all([
+        api<{ title: string }>(`/api/workflows/${workflowId}`),
+        fetchCollection<AssignmentPublic>(`/api/assignments?workflowId=${workflowId}`),
+        api<WorkflowAnalytics>(`/api/workflows/${workflowId}/analytics`),
+        fetchCollection<UserOption>('/api/users'),
+        fetchCollection<SubmissionPublic>(`/api/submissions?workflowId=${workflowId}`),
       ]);
-
       setWorkflowTitle(wf.title);
-      setParticipants(assigneesData || []);
-      setMetrics(metricsData);
-      setAllUsers(usersData || []);
+      setParticipants(assignments.filter(assignment => assignment.status !== 'revoked').map(assignment => {
+        const submission = submissions.find(item => item.studentId === assignment.studentId);
+        return { assignmentId: assignment.id, studentId: assignment.studentId, studentName: assignment.studentName || 'Student', studentEmail: assignment.studentEmail || '', assignedAt: assignment.assignedAt, submissionId: submission?.id || null, submissionStatus: submission?.status || 'unstarted', currentStageIndex: submission?.stageIndex };
+      }));
+      setMetrics({ ...analytics, totalSubmissions: submissions.length, stage0Pending: analytics.stageBreakdown.find(stage => stage.stageIndex === 0)?.pendingCount || 0, stage1Pending: analytics.stageBreakdown.find(stage => stage.stageIndex === 1)?.pendingCount || 0 });
+      setAllUsers(users);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to load process telemetry');
     } finally {
@@ -133,7 +139,7 @@ export default function ProcessMonitor() {
     if (!window.confirm(`Revoke workflow assignment for ${studentName}?`)) return;
 
     try {
-      await api(`/api/workflows/${workflowId}/assignees/${studentId}`, {
+      await api(`/api/assignments/${participants.find(participant => participant.studentId === studentId)?.assignmentId}`, {
         method: 'DELETE',
       });
       showToast(`Assignment revoked for ${studentName}`);
@@ -149,7 +155,7 @@ export default function ProcessMonitor() {
     setAdding(true);
     setErrorMsg(null);
     try {
-      await api(`/api/workflows/${workflowId}/assignees`, {
+      await api(`/api/workflows/${workflowId}/assignments`, {
         method: 'POST',
         body: JSON.stringify({ studentIds: [selectedNewStudentId] }),
       });
@@ -194,7 +200,7 @@ export default function ProcessMonitor() {
           data-testid="EL-058"
           className="btn btn-secondary btn-sm"
         >
-          ← Back to Process Overview
+          Back to Process Overview
         </Link>
       </div>
 
@@ -272,7 +278,7 @@ export default function ProcessMonitor() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
             gap: '14px',
           }}
         >
@@ -434,7 +440,7 @@ export default function ProcessMonitor() {
                               className="btn btn-secondary btn-sm"
                               onClick={() => navigate(`/admin/submissions/${p.submissionId}`)}
                             >
-                              Inspect →
+                              Inspect
                             </button>
                           ) : (
                             <button

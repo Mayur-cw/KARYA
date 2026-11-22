@@ -49,7 +49,7 @@ describe('P-001 Welcome Page and Elements (T-A11Y-P001, EL-001..EL-005)', () => 
     // One h1 heading
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
-    expect(headings[0].textContent).toContain('From Instructions to Execution');
+    expect(headings[0].textContent).toContain('Clear instructions.');
 
     // EL-001 is visible for anonymous
     const signInBtn = screen.getByTestId('EL-001');
@@ -68,8 +68,8 @@ describe('P-001 Welcome Page and Elements (T-A11Y-P001, EL-001..EL-005)', () => 
     await act(async () => {
       fireEvent.click(howItWorksBtn);
     });
-    expect(screen.getByText('How KARYA Functions')).toBeDefined();
-    expect(screen.getByText('1. Explainable Instruction Ingestion')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'How KARYA works' })).toBeDefined();
+    expect(screen.getByText('Define the process')).toBeDefined();
   });
 
   it('renders EL-002 for admin user', async () => {

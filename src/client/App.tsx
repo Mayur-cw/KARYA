@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
 import { Header } from './components/Header';
+import { WorkspaceLayout } from './components/WorkspaceLayout';
 import { RoleGuard } from './components/RoleGuard';
 import { LoadingSkeleton } from './components/LoadingSkeleton';
 
@@ -30,11 +31,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <WorkspaceLayout>
         <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
         <Header />
-        <main id="main-content" className="main-content" role="main">
+        <main tabIndex={-1} id="main-content" className="main-content" role="main">
           <Suspense fallback={<LoadingSkeleton label="Loading workspace..." lines={4} />}>
             <Routes>
               {/* Public & Authentication */}
@@ -178,11 +180,12 @@ export default function App() {
         <footer className="app-footer" role="contentinfo">
           <div className="footer-container">
             <div>
-              <strong>KARYA</strong> — From Instructions to Execution. From Requests to Resolution.
+              <strong>KARYA</strong><span> Clarity at every step.</span>
             </div>
-            <div>Institutional Governance & Operations Desk • Local Production Prototype</div>
+            <div>Institutional operations workspace</div>
           </div>
         </footer>
+      </WorkspaceLayout>
       </AuthProvider>
     </BrowserRouter>
   );

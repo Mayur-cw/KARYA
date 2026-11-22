@@ -40,6 +40,9 @@ describe('P-007 Workflow Overview Page and Elements (T-A11Y-P007, EL-045..EL-050
     needsChanges: 1,
     approved: 1,
     rejected: 0,
+    draft: 0,
+    submitted: 0,
+    stageBreakdown: [{ stageIndex: 0, pendingCount: 2 }, { stageIndex: 1, pendingCount: 1 }],
     stage0Pending: 2,
     stage1Pending: 1,
   };
@@ -48,9 +51,9 @@ describe('P-007 Workflow Overview Page and Elements (T-A11Y-P007, EL-045..EL-050
     vi.clearAllMocks();
     vi.mocked(apiModule.api).mockImplementation((path: string) => {
       if (path === '/api/workflows/wf-overview-123') return Promise.resolve(mockWorkflow);
-      if (path === '/api/workflows/wf-overview-123/metrics') return Promise.resolve(mockMetrics);
-      if (path === '/api/sources/src-123') {
-        return Promise.resolve({ source: { extractedText: 'Sample extracted circular text.' } });
+      if (path === '/api/workflows/wf-overview-123/analytics') return Promise.resolve(mockMetrics);
+      if (path === '/api/documents/src-123') {
+        return Promise.resolve({ extractedText: 'Sample extracted circular text.' });
       }
       return Promise.resolve({});
     });
@@ -142,12 +145,18 @@ describe('P-007 Workflow Overview Page and Elements (T-A11Y-P007, EL-045..EL-050
     await act(async () => {
       fireEvent.click(el049);
     });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Reason for archiving'), { target: { value: 'Application window completed' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm archive' }));
+    });
 
     expect(apiModule.api).toHaveBeenCalledWith(
       '/api/workflows/wf-overview-123/archive',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ expectedVersion: 1 }),
+        body: JSON.stringify({ expectedVersion: 1, reason: 'Application window completed' }),
       })
     );
   });

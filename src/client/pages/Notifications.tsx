@@ -5,6 +5,7 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { EmptyState } from '../components/EmptyState';
 import { api } from '../api';
+import { fetchCollection } from '../collections';
 
 interface NotificationItem {
   id: string;
@@ -16,14 +17,6 @@ interface NotificationItem {
   readAt: string | null;
   dismissedAt: string | null;
   createdAt: string;
-}
-
-interface NotificationPageResponse {
-  items: NotificationItem[];
-  unreadCount: number;
-  total: number;
-  page: number;
-  limit: number;
 }
 
 export default function Notifications() {
@@ -48,9 +41,9 @@ export default function Notifications() {
     try {
       setErrorMsg(null);
       const url = filterMode === 'unread' ? '/api/notifications?unread=true' : '/api/notifications';
-      const data = await api<NotificationPageResponse>(url);
-      setNotifications(data.items || []);
-      setUnreadCount(data.unreadCount || 0);
+      const data = await fetchCollection<NotificationItem>(url);
+      setNotifications(data);
+      setUnreadCount(data.filter(item => !item.readAt).length);
       if (refreshUnreadCount) refreshUnreadCount();
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to load notifications');
@@ -169,19 +162,19 @@ export default function Notifications() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {user?.role === 'admin' && (
             <Link to="/admin" data-testid="EL-114" className="btn btn-secondary btn-sm">
-              ← Admin Command Center
+              Admin Command Center
             </Link>
           )}
 
           {user?.role === 'student' && (
             <Link to="/student" data-testid="EL-115" className="btn btn-secondary btn-sm">
-              ← Student Process Hub
+              Student Process Hub
             </Link>
           )}
 
           {user?.role === 'reviewer' && (
             <Link to="/reviewer" data-testid="EL-116" className="btn btn-secondary btn-sm">
-              ← Reviewer Inbox
+              Reviewer Inbox
             </Link>
           )}
 
@@ -314,7 +307,7 @@ export default function Notifications() {
                           className="btn btn-secondary btn-sm"
                           style={{ fontSize: '12px', padding: '4px 10px' }}
                         >
-                          View Application Workspace →
+                          View Application Workspace
                         </Link>
                       )}
 
@@ -325,7 +318,7 @@ export default function Notifications() {
                           className="btn btn-secondary btn-sm"
                           style={{ fontSize: '12px', padding: '4px 10px' }}
                         >
-                          Open Review Workbench →
+                          Open Review Workbench
                         </Link>
                       )}
 
@@ -336,7 +329,7 @@ export default function Notifications() {
                           className="btn btn-secondary btn-sm"
                           style={{ fontSize: '12px', padding: '4px 10px' }}
                         >
-                          Inspect Process Monitor →
+                          Inspect Process Monitor
                         </Link>
                       )}
                     </div>

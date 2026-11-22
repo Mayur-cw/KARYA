@@ -4,7 +4,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { EmptyState } from '../components/EmptyState';
-import { api } from '../api';
+import { fetchCollection } from '../collections';
 
 interface WorkflowItem {
   id: string;
@@ -12,6 +12,7 @@ interface WorkflowItem {
   title: string;
   description: string;
   status: 'draft' | 'published' | 'archived';
+  deadline?: string;
   deadlinePolicy: {
     initialDeadline: string;
     allowLateResubmissions: boolean;
@@ -35,13 +36,13 @@ export default function WorkflowRegistry() {
   const searchQuery = searchParams.get('q') || '';
   const statusFilter = searchParams.get('status') || 'all';
   const sortBy = searchParams.get('sort') || 'createdAt_desc';
-  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+  const currentPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
     setErrorMsg(null);
-    api<WorkflowItem[]>('/api/workflows')
+    fetchCollection<WorkflowItem>('/api/workflows')
       .then((data) => {
         if (mounted) setWorkflows(data || []);
       })
@@ -95,8 +96,8 @@ export default function WorkflowRegistry() {
         return a.title.localeCompare(b.title);
       }
       if (sortBy === 'deadline_asc') {
-        const da = a.deadlinePolicy?.initialDeadline ? new Date(a.deadlinePolicy.initialDeadline).getTime() : 0;
-        const db = b.deadlinePolicy?.initialDeadline ? new Date(b.deadlinePolicy.initialDeadline).getTime() : 0;
+        const da = a.deadline ? new Date(a.deadlinePolicy.initialDeadline).getTime() : 0;
+        const db = b.deadline ? new Date(b.deadlinePolicy.initialDeadline).getTime() : 0;
         return da - db;
       }
       // default: createdAt_desc
@@ -118,7 +119,7 @@ export default function WorkflowRegistry() {
       {/* Top Breadcrumb / Return */}
       <div style={{ marginBottom: '16px' }}>
         <Link to="/admin" data-testid="EL-023" className="btn btn-secondary btn-sm">
-          ← Back to Command Center
+          Back to Command Center
         </Link>
       </div>
 
@@ -270,19 +271,15 @@ export default function WorkflowRegistry() {
                       <StatusBadge status={wf.status} />
                     </td>
                     <td>
-                      {wf.deadlinePolicy?.initialDeadline
-                        ? new Date(wf.deadlinePolicy.initialDeadline).toLocaleDateString()
+                      {wf.deadline
+                        ? new Date(wf.deadline!).toLocaleDateString()
                         : 'Not specified'}
                     </td>
                     <td>
                       <span className="badge badge-draft">{wf.stages?.length || 0} stages</span>
                     </td>
                     <td>
-                      {wf.deadlinePolicy?.allowLateResubmissions ? (
-                        <span style={{ color: 'var(--success)', fontSize: '13px', fontWeight: 600 }}>Allowed</span>
-                      ) : (
-                        <span style={{ color: 'var(--ink-muted)', fontSize: '13px' }}>Blocked</span>
-                      )}
+                      <span style={{ color: 'var(--success)', fontSize: '14px' }}>Revisions allowed</span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <Link
@@ -291,7 +288,7 @@ export default function WorkflowRegistry() {
                         className="btn btn-secondary btn-sm"
                         aria-label={`Open ${wf.title}`}
                       >
-                        Inspect →
+                        Inspect
                       </Link>
                     </td>
                   </tr>
@@ -325,7 +322,7 @@ export default function WorkflowRegistry() {
                 disabled={!hasPrevPage}
                 aria-label="Previous workflow results"
               >
-                ← Previous
+                Previous
               </button>
 
               <span style={{ fontSize: '13px', fontWeight: 600, padding: '0 8px' }}>
@@ -340,7 +337,7 @@ export default function WorkflowRegistry() {
                 disabled={!hasNextPage}
                 aria-label="Next workflow results"
               >
-                Next →
+                Next
               </button>
             </div>
           </div>

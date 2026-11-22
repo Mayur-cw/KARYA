@@ -207,7 +207,7 @@ export function setDb(db: DatabaseSync): void {
 }
 
 export function initDatabase(dbPath?: string): DatabaseSync {
-  let resolvedPath = dbPath;
+  let resolvedPath = dbPath ?? (process.env.NODE_ENV === 'test' ? ':memory:' : undefined);
   if (!resolvedPath) {
     const dirname = path.dirname(fileURLToPath(import.meta.url));
     const dataDir = path.resolve(dirname, '../../.data');

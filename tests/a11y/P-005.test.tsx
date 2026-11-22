@@ -28,7 +28,7 @@ describe('P-005 Instruction Intake Page and Elements (T-A11Y-P005, EL-024..EL-02
     // Heading
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
-    expect(headings[0].textContent).toContain('Instruction Intake & AI Synthesis');
+    expect(headings[0].textContent).toContain('Intake studio');
 
     // EL-029 Return to registry
     const el029 = screen.getByTestId('EL-029');
@@ -97,12 +97,8 @@ describe('P-005 Instruction Intake Page and Elements (T-A11Y-P005, EL-024..EL-02
 
   it('handles PDF file upload (EL-026) and remove source (EL-025)', async () => {
     vi.mocked(apiModule.api).mockResolvedValueOnce({
-      source: {
-        id: 'src-123',
-        fileName: 'internship_circular.pdf',
-        byteSize: 2048,
-        sha256: 'abcdef1234567890',
-      },
+      id: 'src-123',
+      sha256: 'abcdef1234567890',
     });
 
     await act(async () => {
@@ -122,7 +118,7 @@ describe('P-005 Instruction Intake Page and Elements (T-A11Y-P005, EL-024..EL-02
       fireEvent.change(fileInput, { target: { files: [file] } });
     });
 
-    expect(apiModule.api).toHaveBeenCalledWith('/api/sources/upload', expect.anything());
+    expect(apiModule.api).toHaveBeenCalledWith('/api/documents', expect.anything());
 
     // EL-025 Remove uploaded source should appear
     const removeBtn = screen.getByTestId('EL-025');
@@ -134,7 +130,7 @@ describe('P-005 Instruction Intake Page and Elements (T-A11Y-P005, EL-024..EL-02
       fireEvent.click(removeBtn);
     });
 
-    expect(apiModule.api).toHaveBeenCalledWith('/api/sources/src-123', { method: 'DELETE' });
+    expect(apiModule.api).toHaveBeenCalledWith('/api/documents/src-123', { method: 'DELETE' });
     expect(screen.queryByTestId('EL-025')).toBeNull();
   });
 });

@@ -3,10 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { api, ApiError } from '../api';
+import { fetchCollection } from '../collections';
 
 interface DynamicField {
   id: string;
-  name: string;
+  key: string;
   label: string;
   type: string;
   required: boolean;
@@ -24,7 +25,7 @@ interface WorkflowData {
     allowLateResubmissions: boolean;
   };
   fields: DynamicField[];
-  stages: Array<{ stageIndex: number; name: string }>;
+  stages: Array<{ stageIndex: number; label: string }>;
 }
 
 export default function ProcessRequirements() {
@@ -65,14 +66,15 @@ export default function ProcessRequirements() {
       // EP-023: Create or fetch student's draft submission
       const result = await api<{ id: string }>(`/api/workflows/${workflowId}/submissions`, {
         method: 'POST',
+        body: JSON.stringify({}),
       });
       navigate(`/student/submissions/${result.id}`);
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
         // Already started — fetch user's submissions to find the existing one
         try {
-          const mySubs = await api<{ items: Array<{ id: string; workflowId: string }> }>('/api/submissions');
-          const existing = mySubs.items?.find((s) => s.workflowId === workflowId);
+          const mySubs = await fetchCollection<{ id: string; workflowId: string }>('/api/submissions');
+          const existing = mySubs.find((s) => s.workflowId === workflowId);
           if (existing) {
             navigate(`/student/submissions/${existing.id}`);
             return;
@@ -114,7 +116,7 @@ export default function ProcessRequirements() {
       {/* EL-068 Back link */}
       <div style={{ marginBottom: '16px' }}>
         <Link to="/student" data-testid="EL-068" className="btn btn-secondary btn-sm">
-          ← Back to My Processes
+          Back to My Processes
         </Link>
       </div>
 
@@ -172,9 +174,7 @@ export default function ProcessRequirements() {
             </div>
           </div>
           <div style={{ fontSize: '12px', color: 'var(--ink-muted)', marginTop: '8px' }}>
-            {workflow.deadlinePolicy?.allowLateResubmissions
-              ? 'Policy: Late initial submissions are rejected by the system. However, if a reviewer later requests changes, you will be permitted to resubmit past the initial deadline.'
-              : 'Policy: Strict deadlines apply.'}
+            Initial applications must meet the deadline. You may resubmit after the deadline when a reviewer requests changes.
           </div>
         </div>
 
@@ -206,7 +206,7 @@ export default function ProcessRequirements() {
             >
               {workflow.fields?.map((f) => (
                 <div
-                  key={f.id}
+                  key={f.key}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -265,7 +265,7 @@ export default function ProcessRequirements() {
                   {s.stageIndex + 1}
                 </div>
                 <div>
-                  <strong>{s.name}</strong>
+                  <strong>{s.label}</strong>
                   <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
                     Sequential human review and evaluation
                   </div>
@@ -287,7 +287,7 @@ export default function ProcessRequirements() {
             onClick={handleStartApplication}
             disabled={starting || isPastDeadline}
           >
-            {starting ? 'Initiating Draft...' : 'Start My Application →'}
+            {starting ? 'Initiating Draft...' : 'Start My Application'}
           </button>
         </div>
       </div>

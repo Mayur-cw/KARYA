@@ -108,7 +108,7 @@ export default function PageNotFound() {
             className="btn btn-secondary"
             style={{ width: '100%', maxWidth: '300px', justifyContent: 'center' }}
           >
-            ← Return to Welcome Page
+            Return to Welcome Page
           </Link>
         </div>
       </div>

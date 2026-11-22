@@ -5,11 +5,7 @@ export function seedDatabase(db: DatabaseSync): void {
   const insertUser = db.prepare(`
     INSERT INTO users (id, departmentId, name, email, role, active, createdAt)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      name = excluded.name,
-      email = excluded.email,
-      role = excluded.role,
-      active = excluded.active
+    ON CONFLICT(id) DO NOTHING
   `);
 
   for (const user of SEEDED_USERS) {

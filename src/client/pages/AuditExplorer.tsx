@@ -4,6 +4,7 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { EmptyState } from '../components/EmptyState';
 import { api } from '../api';
+import { fetchCollection } from '../collections';
 
 interface AuditLogItem {
   id: string;
@@ -59,8 +60,8 @@ export default function AuditExplorer() {
   useEffect(() => {
     async function loadWorkflowOptions() {
       try {
-        const data = await api<{ items: WorkflowOption[] }>('/api/workflows');
-        setWorkflows(data.items || []);
+        const data = await fetchCollection<WorkflowOption>('/api/workflows');
+        setWorkflows(data);
       } catch {
         // Non-blocking
       }
@@ -136,7 +137,7 @@ export default function AuditExplorer() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
             <Link to="/admin" data-testid="EL-129" className="btn btn-secondary btn-sm" aria-label="Back to administration">
-              ← Command Center
+              Command Center
             </Link>
             <span className="badge badge-published">Tamper-Evident Ledger</span>
           </div>
@@ -387,7 +388,7 @@ export default function AuditExplorer() {
                 disabled={!hasPrevPage}
                 aria-label="Previous audit page"
               >
-                ← Previous
+                Previous
               </button>
 
               <span style={{ fontSize: '13px', fontWeight: 600, padding: '0 8px' }}>
@@ -402,7 +403,7 @@ export default function AuditExplorer() {
                 disabled={!hasNextPage}
                 aria-label="Next audit page"
               >
-                Next →
+                Next
               </button>
             </div>
           </div>

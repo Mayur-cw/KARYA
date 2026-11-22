@@ -44,7 +44,7 @@ describe('P-002 Demo Sign-in Page and Elements (T-A11Y-P002, EL-006..EL-008)', (
     // Heading
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
-    expect(headings[0].textContent).toContain('Demo Authentication Desk');
+    expect(headings[0].textContent).toContain('Welcome to KARYA');
 
     // EL-008 Back to welcome link
     const backLink = screen.getByTestId('EL-008');

@@ -77,12 +77,11 @@ import {
   handleGetHealthz,
 } from './modules/audit-explorer-csv-report-healthz.js';
 import {
-  findUserById,
   createSession,
   deleteSessionByToken,
   SEEDED_USERS,
 } from './session.js';
-import { getDb } from './repository.js';
+import { getDb, UserRepository } from './repository.js';
 import { demoLoginRequestSchema } from '../shared/contracts.js';
 
 export function createApp() {
@@ -143,8 +142,16 @@ export function createApp() {
   // Auth Endpoints (EP-001, EP-002, EP-003)
   // ==========================================
 
+  const requireDemoMode: import('express').RequestHandler = (_req, res, next) => {
+    if (config.DEMO_MODE !== 'true') {
+      res.status(403).json({ code: 'DEMO_DISABLED', message: 'Demo sign-in is disabled. Contact your administrator for access.' });
+      return;
+    }
+    next();
+  };
+
   // EP-001 POST /api/auth/demo-login
-  app.post('/api/auth/demo-login', requireAnonymous, loginRateLimiter, (req, res) => {
+  app.post('/api/auth/demo-login', requireDemoMode, requireAnonymous, loginRateLimiter, (req, res) => {
     const parseRes = demoLoginRequestSchema.safeParse(req.body);
     if (!parseRes.success) {
       res.status(400).json({
@@ -156,8 +163,9 @@ export function createApp() {
     }
 
     const { userId } = parseRes.data;
-    const user = findUserById(userId);
-    if (!user) {
+    const allowlisted = SEEDED_USERS.some(candidate => candidate.id === userId);
+    const user = allowlisted ? new UserRepository(getDb()).getById(userId) : undefined;
+    if (!user?.active) {
       res.status(404).json({
         code: 'NOT_FOUND',
         message: `Demo user '${userId}' not found or not allowlisted`,
@@ -199,7 +207,7 @@ export function createApp() {
   });
 
   // Demo identities list (for P-002 dropdown in DEMO_MODE)
-  app.get('/api/auth/demo-users', (_req, res) => {
+  app.get('/api/auth/demo-users', requireDemoMode, (_req, res) => {
     res.status(200).json({
       items: SEEDED_USERS,
     });
@@ -212,10 +220,12 @@ export function createApp() {
     res.status(200).json({
       user,
       csrfToken,
+      demoMode: config.DEMO_MODE === 'true',
+      demoActors: config.DEMO_MODE === 'true' ? SEEDED_USERS.filter(candidate => candidate.active) : [],
     });
   });
 
-  app.post('/api/session', loginRateLimiter, (req, res) => {
+  app.post('/api/session', requireDemoMode, loginRateLimiter, (req, res) => {
     const parseRes = demoLoginRequestSchema.safeParse(req.body);
     if (!parseRes.success) {
       res.status(400).json({
@@ -227,8 +237,9 @@ export function createApp() {
     }
 
     const { userId } = parseRes.data;
-    const user = findUserById(userId);
-    if (!user) {
+    const allowlisted = SEEDED_USERS.some(candidate => candidate.id === userId);
+    const user = allowlisted ? new UserRepository(getDb()).getById(userId) : undefined;
+    if (!user?.active) {
       res.status(404).json({
         code: 'NOT_FOUND',
         message: `Demo user '${userId}' not found or not allowlisted`,
@@ -342,7 +353,7 @@ export function createApp() {
   });
 
   // EP-008..EP-011: Document Management (Admin only)
-  app.post('/api/documents', requireRoles('admin'), uploadRateLimiter, handlePostDocument);
+  app.post('/api/documents', requireRoles('admin'), uploadRateLimiter, express.raw({ type: ['application/pdf', 'text/plain'], limit: '5mb' }), handlePostDocument);
   app.get('/api/documents/:documentId', requireRoles('admin'), handleGetDocument);
   app.patch('/api/documents/:documentId', requireRoles('admin'), handlePatchDocument);
   app.delete('/api/documents/:documentId', requireRoles('admin'), handleDeleteDocument);

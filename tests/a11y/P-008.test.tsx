@@ -55,11 +55,12 @@ describe('P-008 Process Monitor Page and Elements (T-A11Y-P008, EL-051..EL-058)'
       if (path === '/api/workflows/wf-mon-123') {
         return Promise.resolve({ title: 'Internship 2026' });
       }
-      if (path === '/api/workflows/wf-mon-123/assignees') {
-        return Promise.resolve(mockParticipants);
+      if (path === '/api/assignments?workflowId=wf-mon-123') {
+        return Promise.resolve({ items: mockParticipants.map(p => ({ ...p, id: `assignment-${p.studentId}`, status: p.submissionId ? 'started' : 'invited' })) });
       }
-      if (path === '/api/workflows/wf-mon-123/metrics') {
-        return Promise.resolve(mockMetrics);
+      if (path === '/api/submissions?workflowId=wf-mon-123') return Promise.resolve({ items: mockParticipants.filter(p => p.submissionId).map(p => ({ id: p.submissionId, studentId: p.studentId, status: p.submissionStatus, stageIndex: 0 })) });
+      if (path === '/api/workflows/wf-mon-123/analytics') {
+        return Promise.resolve({ ...mockMetrics, stageBreakdown: [{ stageIndex: 0, pendingCount: 1 }] });
       }
       if (path === '/api/users') {
         return Promise.resolve(mockUsers);
@@ -158,7 +159,7 @@ describe('P-008 Process Monitor Page and Elements (T-A11Y-P008, EL-051..EL-058)'
     });
 
     expect(apiModule.api).toHaveBeenCalledWith(
-      '/api/workflows/wf-mon-123/assignees/33333333-3333-3333-3333-333333333333',
+      '/api/assignments/assignment-33333333-3333-3333-3333-333333333333',
       { method: 'DELETE' }
     );
   });

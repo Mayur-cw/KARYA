@@ -8,7 +8,7 @@ import { api } from '../api';
 
 interface DynamicField {
   id: string;
-  name: string;
+  key: string;
   label: string;
   type: string;
   required: boolean;
@@ -16,7 +16,7 @@ interface DynamicField {
 
 interface ReviewStage {
   stageIndex: number;
-  name: string;
+  label: string;
   reviewerId: string;
 }
 
@@ -54,6 +54,8 @@ export default function WorkflowOverview() {
   const [workflow, setWorkflow] = useState<WorkflowDetail | null>(null);
   const [metrics, setMetrics] = useState<WorkflowMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveReason, setArchiveReason] = useState('');
   const [archiving, setArchiving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -72,11 +74,11 @@ export default function WorkflowOverview() {
 
       const [wf, m] = await Promise.all([
         api<WorkflowDetail>(`/api/workflows/${workflowId}`),
-        api<WorkflowMetrics>(`/api/workflows/${workflowId}/metrics`).catch(() => null),
+        api<import('../../shared/contracts').WorkflowAnalytics>(`/api/workflows/${workflowId}/analytics`).catch(() => null),
       ]);
 
       setWorkflow(wf);
-      setMetrics(m);
+      setMetrics(m ? { ...m, totalSubmissions: m.draft + m.submitted + m.inReview + m.needsChanges + m.approved + m.rejected, stage0Pending: m.stageBreakdown.find(stage => stage.stageIndex === 0)?.pendingCount || 0, stage1Pending: m.stageBreakdown.find(stage => stage.stageIndex === 1)?.pendingCount || 0 } : null);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to load workflow details');
     } finally {
@@ -102,8 +104,8 @@ export default function WorkflowOverview() {
     setSourceLoading(true);
     setSourceModalOpen(true);
     try {
-      const doc = await api<{ source: { extractedText: string } }>(`/api/sources/${workflow.sourceId}`);
-      setSourceText(doc.source.extractedText);
+      const doc = await api<{ extractedText: string }>(`/api/documents/${workflow.sourceId}`);
+      setSourceText(doc.extractedText);
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to retrieve source text');
     } finally {
@@ -141,17 +143,15 @@ export default function WorkflowOverview() {
   // EL-049 Archive workflow
   const handleArchive = async () => {
     if (!workflowId || !workflow) return;
-    if (!window.confirm('Are you sure you want to archive this workflow? It will become read-only.')) {
-      return;
-    }
-
+    if (!archiveReason.trim()) return;
     setArchiving(true);
     setErrorMsg(null);
     try {
       await api(`/api/workflows/${workflowId}/archive`, {
         method: 'POST',
-        body: JSON.stringify({ expectedVersion: workflow.version }),
+        body: JSON.stringify({ expectedVersion: workflow.version, reason: archiveReason.trim() }),
       });
+      setArchiveOpen(false);
       showToast('Workflow has been archived');
       await loadWorkflow();
     } catch (err: unknown) {
@@ -188,7 +188,7 @@ export default function WorkflowOverview() {
       {/* Return link (EL-050) */}
       <div style={{ marginBottom: '16px' }}>
         <Link to="/admin/workflows" data-testid="EL-050" className="btn btn-secondary btn-sm">
-          ← Return to Workflow Registry
+          Return to Workflow Registry
         </Link>
       </div>
 
@@ -279,7 +279,7 @@ export default function WorkflowOverview() {
                 type="button"
                 data-testid="EL-049"
                 className="btn btn-danger btn-sm"
-                onClick={handleArchive}
+                onClick={() => setArchiveOpen(true)}
                 disabled={archiving}
               >
                 {archiving ? 'Archiving...' : 'Archive'}
@@ -295,7 +295,7 @@ export default function WorkflowOverview() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
             gap: '16px',
           }}
         >
@@ -337,7 +337,7 @@ export default function WorkflowOverview() {
       </section>
 
       {/* Process Structure Overview */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '20px' }}>
         {/* Stages and Reviewers */}
         <div className="card">
           <h2 style={{ fontSize: '16px', marginBottom: '12px' }}>Review Pipeline</h2>
@@ -357,7 +357,7 @@ export default function WorkflowOverview() {
               >
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '13px' }}>
-                    Stage {s.stageIndex}: {s.name}
+                    Stage {s.stageIndex}: {s.label}
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
                     Reviewer ID: {s.reviewerId ? s.reviewerId.substring(0, 8) + '...' : 'Unassigned'}
@@ -375,7 +375,7 @@ export default function WorkflowOverview() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {workflow.fields?.map((f) => (
               <div
-                key={f.id}
+                key={f.key}
                 style={{
                   padding: '8px 12px',
                   borderRadius: 'var(--radius-sm)',
@@ -437,6 +437,10 @@ export default function WorkflowOverview() {
             </div>
           </div>
         )}
+      </Dialog>
+      <Dialog isOpen={archiveOpen} onClose={() => { if (!archiving) setArchiveOpen(false); }} title="Archive this workflow?" description="Archiving stops new applications and makes the workflow read-only. Existing records remain available.">
+        <div className="form-group"><label className="form-label" htmlFor="archive-reason">Reason for archiving</label><textarea id="archive-reason" className="form-textarea" maxLength={500} value={archiveReason} onChange={event => setArchiveReason(event.target.value)} placeholder="Explain why this process is being closed." disabled={archiving} /></div>
+        <div className="heading-actions"><button type="button" className="btn btn-secondary" onClick={() => setArchiveOpen(false)} disabled={archiving}>Cancel</button><button type="button" className="btn btn-danger" onClick={handleArchive} disabled={archiving || !archiveReason.trim()}>{archiving ? 'Archiving…' : 'Confirm archive'}</button></div>
       </Dialog>
     </div>
   );

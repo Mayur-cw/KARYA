@@ -8,9 +8,9 @@ import { api, ApiError } from '../api';
 
 interface DynamicField {
   id: string;
-  name: string;
+  key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'select' | 'date' | 'file';
+  type: 'text' | 'select' | 'date' | 'file';
   required: boolean;
   options?: string[];
   placeholder?: string;
@@ -27,7 +27,7 @@ interface WorkflowData {
     allowLateResubmissions: boolean;
   };
   fields: DynamicField[];
-  stages: Array<{ stageIndex: number; name: string }>;
+  stages: Array<{ stageIndex: number; label: string }>;
 }
 
 interface AttachmentItem {
@@ -43,8 +43,8 @@ interface DecisionRecord {
   stageIndex: number;
   reviewerId: string;
   reviewerName?: string;
-  decision: 'approve' | 'needs_changes' | 'reject';
-  notes: string;
+  action: 'approve' | 'needs_changes' | 'reject';
+  reason?: string;
   decidedAt: string;
 }
 
@@ -55,8 +55,9 @@ interface SubmissionDetail {
   status: 'draft' | 'submitted' | 'in_review' | 'needs_changes' | 'approved' | 'rejected';
   answers: Record<string, string | number | boolean>;
   attachments?: AttachmentItem[];
-  decisions?: DecisionRecord[];
-  currentStageIndex: number;
+  history?: DecisionRecord[];
+  stageIndex: number;
+  version: number;
   submittedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -131,10 +132,11 @@ export default function SubmissionWorkspace() {
     setSaving(true);
     setErrorMsg(null);
     try {
-      await api(`/api/submissions/${submissionId}`, {
+      const saved = await api<SubmissionDetail>(`/api/submissions/${submissionId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, expectedVersion: submission?.version }),
       });
+      setSubmission(saved);
       showToast('Changes saved to submission draft');
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to save changes');
@@ -165,7 +167,7 @@ export default function SubmissionWorkspace() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const result = await api<{ attachment: AttachmentItem }>(
+      const result = await api<AttachmentItem>(
         `/api/submissions/${submissionId}/attachments`,
         {
           method: 'POST',
@@ -173,7 +175,9 @@ export default function SubmissionWorkspace() {
         }
       );
 
-      setAttachments([...attachments, result.attachment]);
+      setAttachments([...attachments, result]);
+      const fileField = workflow?.fields.find(field => field.type === 'file' && !answers[field.key]);
+      if (fileField) setAnswers(current => ({ ...current, [fileField.key]: result.id }));
       showToast('Supporting document attached and verified');
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Attachment upload failed');
@@ -231,6 +235,7 @@ export default function SubmissionWorkspace() {
         method: 'DELETE',
       });
       setAttachments(attachments.filter((a) => a.id !== deletingAttachmentId));
+      setAnswers(current => Object.fromEntries(Object.entries(current).map(([key, value]) => [key, value === deletingAttachmentId ? '' : value])));
       setDeletingAttachmentId(null);
       showToast('Attachment removed from draft');
     } catch (err: unknown) {
@@ -264,7 +269,7 @@ export default function SubmissionWorkspace() {
     if (workflow?.fields) {
       for (const field of workflow.fields) {
         if (field.required) {
-          const val = answers[field.name];
+          const val = answers[field.key];
           if (val === undefined || val === null || String(val).trim() === '') {
             setErrorMsg(`Please complete required field: ${field.label}`);
             return;
@@ -278,14 +283,16 @@ export default function SubmissionWorkspace() {
 
     try {
       // First save latest answers
-      await api(`/api/submissions/${submissionId}`, {
+      const saved = await api<SubmissionDetail>(`/api/submissions/${submissionId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, expectedVersion: submission?.version }),
       });
+      setSubmission(saved);
 
       // Submit application
       const updated = await api<SubmissionDetail>(`/api/submissions/${submissionId}/submit`, {
         method: 'POST',
+        body: JSON.stringify({ expectedVersion: saved.version }),
       });
 
       setSubmission(updated);
@@ -337,8 +344,8 @@ export default function SubmissionWorkspace() {
   const isRejected = submission.status === 'rejected';
 
   const lastDecision =
-    submission.decisions && submission.decisions.length > 0
-      ? submission.decisions[submission.decisions.length - 1]
+    submission.history && submission.history.length > 0
+      ? submission.history[submission.history.length - 1]
       : null;
 
   return (
@@ -346,7 +353,7 @@ export default function SubmissionWorkspace() {
       {/* EL-076 Return link */}
       <div style={{ marginBottom: '16px' }}>
         <Link to="/student" data-testid="EL-076" className="btn btn-secondary btn-sm">
-          ← Return to My Processes
+          Return to My Processes
         </Link>
       </div>
 
@@ -451,7 +458,7 @@ export default function SubmissionWorkspace() {
             <span className="badge badge-needs_changes">Stage {lastDecision.stageIndex}</span>
           </div>
           <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.5 }}>
-            <strong>Feedback:</strong> {lastDecision.notes}
+            <strong>Feedback:</strong> {lastDecision.reason}
           </p>
           <div style={{ marginTop: '4px' }}>
             <button
@@ -509,29 +516,21 @@ export default function SubmissionWorkspace() {
         <div data-testid="EL-069" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           {workflow?.fields && workflow.fields.length > 0 ? (
             workflow.fields.map((field) => {
-              const val = answers[field.name] !== undefined ? String(answers[field.name]) : '';
+              const val = answers[field.key] !== undefined ? String(answers[field.key]) : '';
               return (
-                <div key={field.id} className="form-group" style={{ marginBottom: 0 }}>
-                  <label htmlFor={`input-${field.name}`} className="form-label">
+                <div key={field.key} className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor={field.type === 'file' ? 'attachment-file-upload' : `input-${field.key}`} className="form-label">
                     {field.label} {field.required && <span style={{ color: 'var(--danger)' }}>*</span>}
                   </label>
 
-                  {field.type === 'textarea' ? (
-                    <textarea
-                      id={`input-${field.name}`}
-                      className="form-textarea"
-                      value={val}
-                      onChange={(e) => setAnswers({ ...answers, [field.name]: e.target.value })}
-                      placeholder={field.placeholder || 'Enter details...'}
-                      disabled={!isEditable}
-                      rows={4}
-                    />
+                  {field.type === 'file' ? (
+                    <p className="form-hint">Attach a supporting document below. {val ? 'A document is linked to this field.' : 'No document linked yet.'}</p>
                   ) : field.type === 'select' && field.options ? (
                     <select
-                      id={`input-${field.name}`}
+                      id={`input-${field.key}`}
                       className="form-select"
                       value={val}
-                      onChange={(e) => setAnswers({ ...answers, [field.name]: e.target.value })}
+                      onChange={(e) => setAnswers({ ...answers, [field.key]: e.target.value })}
                       disabled={!isEditable}
                     >
                       <option value="">-- Select an option --</option>
@@ -543,11 +542,11 @@ export default function SubmissionWorkspace() {
                     </select>
                   ) : (
                     <input
-                      id={`input-${field.name}`}
-                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                      id={`input-${field.key}`}
+                      type={field.type === 'date' ? 'date' : 'text'}
                       className="form-input"
                       value={val}
-                      onChange={(e) => setAnswers({ ...answers, [field.name]: e.target.value })}
+                      onChange={(e) => setAnswers({ ...answers, [field.key]: e.target.value })}
                       placeholder={field.placeholder || ''}
                       disabled={!isEditable}
                     />
@@ -721,7 +720,7 @@ export default function SubmissionWorkspace() {
                 disabled={submitting}
                 style={{ minHeight: '48px', padding: '0 24px', fontSize: '15px' }}
               >
-                {submitting ? 'Submitting...' : 'Submit Application →'}
+                {submitting ? 'Submitting...' : 'Submit Application'}
               </button>
             ) : (
               <button
@@ -732,7 +731,7 @@ export default function SubmissionWorkspace() {
                 disabled={submitting}
                 style={{ minHeight: '48px', padding: '0 24px', fontSize: '15px' }}
               >
-                {submitting ? 'Resubmitting...' : 'Resubmit Application →'}
+                {submitting ? 'Resubmitting...' : 'Resubmit Application'}
               </button>
             )}
           </div>
@@ -816,8 +815,8 @@ export default function SubmissionWorkspace() {
         maxWidth="640px"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {submission.decisions && submission.decisions.length > 0 ? (
-            submission.decisions.map((d, i) => (
+          {submission.history && submission.history.length > 0 ? (
+            submission.history.map((d, i) => (
               <div
                 key={i}
                 style={{
@@ -829,14 +828,14 @@ export default function SubmissionWorkspace() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                   <span style={{ fontWeight: 700, fontSize: '14px' }}>
-                    Stage {d.stageIndex}: {d.decision.toUpperCase()}
+                    Stage {d.stageIndex}: {d.action.toUpperCase()}
                   </span>
                   <span style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
                     {new Date(d.decidedAt).toLocaleString()}
                   </span>
                 </div>
                 <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-secondary)' }}>
-                  <strong>Reviewer Feedback:</strong> {d.notes}
+                  <strong>Reviewer Feedback:</strong> {d.reason}
                 </p>
               </div>
             ))

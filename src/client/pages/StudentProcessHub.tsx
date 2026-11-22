@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
+import { MetricCards } from '../components/MetricCards';
 import { StatusBadge } from '../components/StatusBadge';
 import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { EmptyState } from '../components/EmptyState';
-import { api } from '../api';
+import { fetchCollection } from '../collections';
 
 interface WorkflowItem {
   id: string;
@@ -57,12 +58,12 @@ export default function StudentProcessHub() {
       setErrorMsg(null);
 
       const [workflowsResp, submissionsResp] = await Promise.all([
-        api<{ items: WorkflowItem[] }>('/api/workflows'),
-        api<{ items: SubmissionItem[] }>('/api/submissions').catch(() => ({ items: [] })),
+        fetchCollection<WorkflowItem>('/api/workflows'),
+        fetchCollection<SubmissionItem>('/api/submissions'),
       ]);
 
-      const workflowsList = workflowsResp?.items || [];
-      const submissionsList = submissionsResp?.items || [];
+      const workflowsList = workflowsResp;
+      const submissionsList = submissionsResp;
 
       // Map workflow to student submission
       const subMap = new Map<string, SubmissionItem>();
@@ -81,8 +82,10 @@ export default function StudentProcessHub() {
       });
 
       setProcesses(merged);
+      return true;
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to load assigned processes');
+      return false;
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,8 +99,7 @@ export default function StudentProcessHub() {
   // EL-065 Refresh assigned processes
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadStudentData();
-    showToast('Process hub refreshed');
+    if (await loadStudentData()) showToast('Process hub refreshed');
   };
 
   // EL-064 Logout
@@ -121,7 +123,7 @@ export default function StudentProcessHub() {
   const approved = processes.filter((p) => p.derivedStatus === 'approved').length;
 
   return (
-    <div className="student-process-hub" data-testid="page-p-009" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="student-process-hub" data-testid="page-p-009" >
       {/* Top Header */}
       <div
         style={{
@@ -140,9 +142,9 @@ export default function StudentProcessHub() {
               Applicant: {user?.name || 'Student'}
             </span>
           </div>
-          <h1>Student Process Hub</h1>
+          <h1>My process hub</h1>
           <p className="card-subtitle">
-            View assigned departmental workflows, track application milestones, and resubmit feedback corrections.
+            Everything you need to apply, track progress, and take your next step.
           </p>
         </div>
 
@@ -181,47 +183,12 @@ export default function StudentProcessHub() {
         />
       )}
 
-      {/* Overview Metric Counters */}
-      <section style={{ marginBottom: '24px' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-            gap: '16px',
-          }}
-        >
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--ink-muted)', fontWeight: 600 }}>ASSIGNED PROCESSES</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '2px' }}>
-              {loading ? '-' : totalAssigned}
-            </div>
-          </div>
-
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>ACTION REQUIRED</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--warning)', marginTop: '2px' }}>
-              {loading ? '-' : pendingActions}
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Unstarted, drafts & revision requests</span>
-          </div>
-
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600 }}>IN FACULTY REVIEW</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--primary)', marginTop: '2px' }}>
-              {loading ? '-' : inReview}
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Pending mentor or dean evaluation</span>
-          </div>
-
-          <div className="card" style={{ padding: '16px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 600 }}>SANCTIONED / APPROVED</span>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--success)', marginTop: '2px' }}>
-              {loading ? '-' : approved}
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--ink-muted)' }}>Completed approval workflows</span>
-          </div>
-        </div>
-      </section>
+      <MetricCards loading={loading} error={!!errorMsg} items={[
+        { title: 'Assigned processes', value: totalAssigned, description: 'Your departmental workflows', icon: 'layers' },
+        { title: 'Action required', value: pendingActions, description: 'Applications to start or update', icon: 'clock' },
+        { title: 'In faculty review', value: inReview, description: 'With your assigned reviewers', icon: 'inbox' },
+        { title: 'Approved', value: approved, description: 'Completed successfully', icon: 'check', featured: true },
+      ]} />
 
       {/* Filter and Refresh Strip (EL-061, EL-065) */}
       <div
@@ -342,7 +309,7 @@ export default function StudentProcessHub() {
                       )}
                       <span>
                         <strong>Late Resubmissions:</strong>{' '}
-                        {p.workflow.deadlinePolicy?.allowLateResubmissions ? 'Permitted for revisions' : 'Strict'}
+                        {'Allowed when changes are requested'}
                       </span>
                     </div>
                   </div>
@@ -355,7 +322,7 @@ export default function StudentProcessHub() {
                         data-testid="EL-059"
                         className="btn btn-primary"
                       >
-                        Start Application →
+                        Start Application
                       </Link>
                     ) : (
                       <Link
@@ -363,7 +330,7 @@ export default function StudentProcessHub() {
                         data-testid="EL-060"
                         className={`btn ${p.derivedStatus === 'needs_changes' ? 'btn-primary' : 'btn-secondary'}`}
                       >
-                        {p.derivedStatus === 'needs_changes' ? 'Fix & Resubmit →' : 'View Submission Workspace →'}
+                        {p.derivedStatus === 'needs_changes' ? 'Fix & Resubmit' : 'View Submission Workspace'}
                       </Link>
                     )}
                   </div>
