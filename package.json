@@ -7,7 +7,7 @@
     "node": ">=26.0.0 <27"
   },
   "scripts": {
-    "dev": "concurrently \"tsx watch src/server/index.ts\" \"vite --host 127.0.0.1\"",
+    "dev": "concurrently \"DEMO_MODE=true tsx watch src/server/index.ts\" \"vite --host 0.0.0.0\"",
     "build": "tsc -p tsconfig.server.json && vite build",
     "start": "node dist-server/server/index.js",
     "lint": "eslint .",

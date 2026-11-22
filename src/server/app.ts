@@ -105,14 +105,22 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: (origin, cb) =>
-        cb(
-          null,
-          !origin ||
-            config.ALLOWED_ORIGINS.split(',')
-              .map((x) => x.trim())
-              .includes(origin)
-        ),
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true);
+        const allowed = config.ALLOWED_ORIGINS.split(',').map((x) => x.trim());
+        if (allowed.includes(origin)) return cb(null, true);
+        if (config.NODE_ENV === 'development') {
+          try {
+            const url = new URL(origin);
+            if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname.startsWith('192.168.') || url.hostname.startsWith('10.') || /^172\.(1[6-9]|2\d|3[0-1])\./.test(url.hostname)) {
+              return cb(null, true);
+            }
+          } catch {
+            // invalid URL
+          }
+        }
+        return cb(null, false);
+      },
       credentials: true,
     })
   );
