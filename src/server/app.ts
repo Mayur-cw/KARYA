@@ -72,6 +72,11 @@ import {
   handleGetWorkflowAnalytics,
 } from './modules/notification-delivery-live-dashboards.js';
 import {
+  handleGetAuditLogs,
+  handleGetWorkflowReportCsv,
+  handleGetHealthz,
+} from './modules/audit-explorer-csv-report-healthz.js';
+import {
   findUserById,
   createSession,
   deleteSessionByToken,
@@ -124,8 +129,8 @@ export function createApp() {
   app.use(express.json({ limit: '64kb' }));
 
   // Health check endpoints (EP-040 + /healthz)
-  app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
-  app.get('/api/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
+  app.get('/healthz', handleGetHealthz);
+  app.get('/api/healthz', handleGetHealthz);
 
   // Attach authentication context to all API routes
   app.use('/api', authenticate);
@@ -241,6 +246,12 @@ export function createApp() {
 
   // EP-034: Workflow Analytics & Live Dashboard (Admin only)
   app.get('/api/workflows/:workflowId/analytics', requireRoles('admin'), readRateLimiter, handleGetWorkflowAnalytics);
+
+  // EP-033: Audit Explorer (Admin only)
+  app.get('/api/audit', requireRoles('admin'), readRateLimiter, handleGetAuditLogs);
+
+  // EP-035: Workflow CSV Report Export (Admin only)
+  app.get('/api/workflows/:workflowId/report.csv', requireRoles('admin'), readRateLimiter, handleGetWorkflowReportCsv);
 
   // Route stub for testing student object isolation (IDOR guard)
   app.get('/api/submissions/:submissionId/test-scope', requireAuth, (req, res) => {
