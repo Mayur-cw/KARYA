@@ -12,3 +12,4 @@ planning-private/
 *.zip
 *.sha256
 .data/
+.karya_storage/
