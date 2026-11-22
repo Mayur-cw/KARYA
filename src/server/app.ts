@@ -41,6 +41,16 @@ import {
   handleArchiveWorkflow,
 } from './modules/workflow-draft-publish-gate.js';
 import {
+  handleGetUsers,
+  handlePostUser,
+  handleGetUserById,
+  handlePatchUserById,
+  handleGetAssignments,
+  handlePostWorkflowAssignments,
+  handlePatchAssignment,
+  handleDeleteAssignment,
+} from './modules/cohort-eligibility-assignee-policies.js';
+import {
   findUserById,
   createSession,
   deleteSessionByToken,
@@ -168,15 +178,17 @@ export function createApp() {
     });
   });
 
-  // Route stub for admin-only endpoint test (EP-004 GET /api/users)
-  app.get('/api/users', requireRoles('admin'), (_req, res) => {
-    res.status(200).json({
-      items: SEEDED_USERS,
-      total: SEEDED_USERS.length,
-      page: 1,
-      limit: 20,
-    });
-  });
+  // EP-004..EP-007: User & Identity Management
+  app.get('/api/users', requireRoles('admin'), readRateLimiter, handleGetUsers);
+  app.post('/api/users', requireRoles('admin'), writeRateLimiter, handlePostUser);
+  app.get('/api/users/:userId', requireAuth, readRateLimiter, handleGetUserById);
+  app.patch('/api/users/:userId', requireAuth, writeRateLimiter, handlePatchUserById);
+
+  // EP-019..EP-022: Assignment & Cohort Management
+  app.get('/api/assignments', requireRoles('admin', 'student'), readRateLimiter, handleGetAssignments);
+  app.post('/api/workflows/:workflowId/assignments', requireRoles('admin'), writeRateLimiter, handlePostWorkflowAssignments);
+  app.patch('/api/assignments/:assignmentId', requireRoles('admin'), writeRateLimiter, handlePatchAssignment);
+  app.delete('/api/assignments/:assignmentId', requireRoles('admin'), writeRateLimiter, handleDeleteAssignment);
 
   // Route stub for student-only submission creation (EP-023)
   app.post('/api/workflows/:workflowId/submissions', requireRoles('student'), (req, res) => {

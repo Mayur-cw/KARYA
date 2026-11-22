@@ -384,6 +384,31 @@ export class UserRepository {
     };
   }
 
+  getByEmail(email: string): UserPublic | null {
+    const stmt = this.db.prepare('SELECT id, departmentId, name, email, role, active, createdAt FROM users WHERE email = ?');
+    const row = stmt.get(email) as unknown as UserRow | undefined;
+    if (!row) return null;
+    return {
+      id: row.id,
+      departmentId: row.departmentId,
+      name: row.name,
+      email: row.email,
+      role: row.role,
+      active: Boolean(row.active),
+      createdAt: row.createdAt,
+    };
+  }
+
+  update(id: string, updates: { name?: string; active?: boolean }): UserPublic | null {
+    const user = this.getById(id);
+    if (!user) return null;
+    const newName = updates.name !== undefined ? updates.name : user.name;
+    const newActive = updates.active !== undefined ? (updates.active ? 1 : 0) : (user.active ? 1 : 0);
+    const stmt = this.db.prepare('UPDATE users SET name = ?, active = ? WHERE id = ?');
+    stmt.run(newName, newActive, id);
+    return this.getById(id);
+  }
+
   listByDepartment(departmentId: string, role?: string): UserPublic[] {
     let sql = 'SELECT id, departmentId, name, email, role, active, createdAt FROM users WHERE departmentId = ?';
     const params: string[] = [departmentId];
